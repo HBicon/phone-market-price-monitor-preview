@@ -122,6 +122,7 @@
     $("#coverageRing").style.background = `conic-gradient(var(--ink) 0 ${meta.coverage}%, var(--paper-deep) ${meta.coverage}% 100%)`;
     $("#anomalyCount").textContent = num(market.anomalies);
     $("#anomalyDelta").textContent = `+${Math.round(((market.anomalies / market.anomalyBaseline) - 1) * 100)}%`;
+    $("#signalActionText").textContent = `查看全部 ${num(data.movers.length)} 条异动`;
     $("#upCount").textContent = num(market.up);
     $("#downCount").textContent = num(market.down);
     $("#flatCount").textContent = num(market.flat);
