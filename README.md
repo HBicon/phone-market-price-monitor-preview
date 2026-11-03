@@ -2,6 +2,11 @@
 
 面向手机回收与竞拍业务的市场价格监控原型。看板围绕「市场是否在变、哪个品牌在变、哪个 SKU 在变」组织信息，支持按日查看价格变化，并下钻到机型、内存和成色。
 
+## 公网评审
+
+- 评审站：https://hbicon.github.io/phone-market-price-monitor-preview/
+- 代码仓库：https://github.com/HBicon/phone-market-price-monitor-preview
+
 ## 本地预览
 
 ```bash
