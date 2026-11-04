@@ -5,6 +5,7 @@
   if (!data) return;
 
   const CONDITIONS = ["靓机", "小花", "大花", "外爆", "内爆"];
+  const THREE_TIER_CONDITIONS = ["靓机", "小花", "大花"];
   const CONDITION_COLORS = Object.fromEntries(data.conditions.map((item) => [item.name, item.color]));
   const SORT_LABELS = {
     impact: "按有效波动排序",
@@ -15,6 +16,9 @@
     rank: "按重点池排序",
   };
   const SAMPLE_LIMIT = 5;
+  const TARGET_MODELS = Number(data.meta.targetModels || 1000);
+  const WATCHLIST_KEY = "price-pulse.watchlist.v1";
+  const OPS_STORAGE_PREFIX = "price-pulse.ops.";
   const numberFormat = new Intl.NumberFormat("zh-CN");
   const state = {
     dateIndex: data.dates.length - 1,
@@ -26,6 +30,7 @@
     pageSize: 20,
     visibleCount: 20,
     drawerModelId: null,
+    drawerMemory: null,
     drawerCondition: null,
   };
   let toastTimer = null;
@@ -69,6 +74,20 @@
   const percentChange = (current, previous) => {
     if (!current || !previous) return null;
     return Number((((current / previous) - 1) * 100).toFixed(2));
+  };
+  const median = (values) => {
+    if (!values.length) return null;
+    const ordered = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(ordered.length / 2);
+    return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+  };
+  const quantile = (values, ratio) => {
+    if (!values.length) return null;
+    const ordered = [...values].sort((a, b) => a - b);
+    const position = (ordered.length - 1) * ratio;
+    const low = Math.floor(position);
+    const high = Math.min(low + 1, ordered.length - 1);
+    return ordered[low] + (ordered[high] - ordered[low]) * (position - low);
   };
   const defaultVisibleCount = () => (state.scope === "top100" ? data.meta.top100 : state.pageSize);
 
@@ -171,6 +190,90 @@
     return data.models.map((model) => buildModelRow(model, index)).filter(Boolean);
   }
 
+  function modelMemories(model) {
+    const memories = Object.keys(model.configs || {});
+    return memories.length ? memories : [model.mainMemory];
+  }
+
+  function configFor(model, memory = state.drawerMemory) {
+    return model.configs?.[memory] || model.conditions;
+  }
+
+  function configPriceAt(model, memory, condition, index) {
+    const history = configFor(model, memory)?.[condition];
+    return history && history[index] !== null && history[index] !== undefined ? history[index] : null;
+  }
+
+  function quoteStats(history, index) {
+    const values = [];
+    let previous = null;
+    history.forEach((value, dayIndex) => {
+      if (dayIndex > index || value === null) {
+        previous = value === null ? null : previous;
+        return;
+      }
+      const change = previous ? percentChange(value, previous) : null;
+      if (change === null || Math.abs(change) <= data.meta.anomalyLimit) values.push(value);
+      previous = value;
+    });
+    const low = quantile(values, 0.25);
+    const high = quantile(values, 0.75);
+    return {
+      values,
+      median: median(values),
+      low,
+      high,
+      min: values.length ? Math.min(...values) : null,
+      max: values.length ? Math.max(...values) : null,
+      sample: values.length,
+    };
+  }
+
+  function hasSameThreeTierSeries(model) {
+    const series = THREE_TIER_CONDITIONS.map((condition) => model.conditions?.[condition] || []);
+    if (series.some((values) => !values.length) || !series[0].some((value) => value !== null && value !== undefined)) return false;
+    const reference = series[0];
+    return series.every((values) => values.length === reference.length && values.every((value, index) => (value ?? null) === (reference[index] ?? null)));
+  }
+
+  function skuKey(model, memory, condition) {
+    return `${model.id}|${memory}|${condition}`;
+  }
+
+  function readWatchlist() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(WATCHLIST_KEY) || "[]"));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function writeWatchlist(set) {
+    try {
+      localStorage.setItem(WATCHLIST_KEY, JSON.stringify([...set]));
+    } catch {
+      // Local storage is optional in privacy-restricted browsers.
+    }
+  }
+
+  function isWatched(model, memory, condition) {
+    return readWatchlist().has(skuKey(model, memory, condition));
+  }
+
+  function toggleSkuWatch() {
+    const selection = drawerSelection();
+    if (!selection) return;
+    const { model, memory, condition } = selection;
+    const watchlist = readWatchlist();
+    const key = skuKey(model, memory, condition);
+    const wasWatched = watchlist.has(key);
+    if (wasWatched) watchlist.delete(key);
+    else watchlist.add(key);
+    writeWatchlist(watchlist);
+    renderDrawer();
+    showToast(wasWatched ? "已取消关注该 SKU" : "已关注该 SKU");
+  }
+
   function filteredModelRows() {
     const query = state.query.trim().toLowerCase();
     let rows = allModelRows().filter((row) => {
@@ -178,7 +281,7 @@
       if (state.brand !== "all" && row.brand !== state.brand) return false;
       if (state.condition !== "全部" && row.condition !== state.condition) return false;
       if (!query) return true;
-      return `${row.model} ${row.brand} ${row.brandShort} ${row.modelId} ${row.mainMemory} ${row.condition}`.toLowerCase().includes(query);
+      return `${row.model} ${row.brand} ${row.brandShort} ${row.modelId} ${row.mainMemory} ${row.condition} ${modelMemories(row).join(" ")}`.toLowerCase().includes(query);
     });
     rows = [...rows];
     const validFirst = (a, b) => Number(a.isAnomaly) - Number(b.isAnomaly);
@@ -378,6 +481,161 @@
     $(".top100-band").classList.toggle("is-current", state.scope === "top100");
   }
 
+  function opsStorageKey() {
+    return `${OPS_STORAGE_PREFIX}${data.meta.businessDate}`;
+  }
+
+  function readOpsDone() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(opsStorageKey()) || "[]"));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function writeOpsDone(done) {
+    try {
+      localStorage.setItem(opsStorageKey(), JSON.stringify([...done]));
+    } catch {
+      // Local storage is optional in privacy-restricted browsers.
+    }
+  }
+
+  function buildOpsTasks() {
+    const tasks = [];
+    const rows = allModelRows().filter((row) => inScope(row) && (state.condition === "全部" || row.condition === state.condition));
+    const anomalyStats = conditionStatsFor(state.scope, state.condition);
+    if (anomalyStats.anomalies > 0) {
+      tasks.push({
+        id: `anomaly-${state.scope}-${state.condition}`,
+        severity: "P0",
+        tag: "价格核验",
+        title: `核验 ${num(anomalyStats.anomalies)} 条异常跳价`,
+        detail: `${scopeLabel()} · ${conditionLabel()} · 超过 ±${data.meta.anomalyLimit}% 的报价已隔离，先排除录价或映射错误。`,
+        action: "anomaly",
+        actionLabel: "筛选异常",
+      });
+    }
+
+    const mover = rows
+      .filter((row) => !row.isAnomaly && row.change !== null && Math.abs(row.change) >= 5)
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))[0];
+    if (mover) {
+      tasks.push({
+        id: `mover-${mover.id}-${mover.condition}`,
+        severity: "P1",
+        tag: "机型异动",
+        title: `${mover.model} ${signedPercent(mover.change)}`,
+        detail: `${mover.brand} · ${mover.mainMemory} · 有效波动 ${Math.abs(mover.change).toFixed(2)}%，覆盖 ${mover.coverageDays}/7 天。`,
+        action: "model",
+        actionLabel: "查看报价",
+        modelId: mover.id,
+      });
+    }
+
+    const brand = data.brands
+      .map((item) => ({ item, value: brandDailyValue(item) }))
+      .filter((entry) => entry.value.normal >= SAMPLE_LIMIT && Math.abs(entry.value.change) >= 3)
+      .sort((a, b) => Math.abs(b.value.change) - Math.abs(a.value.change))[0];
+    if (brand) {
+      tasks.push({
+        id: `brand-${brand.item.name}-${state.condition}`,
+        severity: "P2",
+        tag: "品牌脉动",
+        title: `${brand.item.name} 品牌日变动 ${signedPercent(brand.value.change)}`,
+        detail: `${scopeLabel()} · ${conditionLabel()} · 可比样本 ${num(brand.value.normal)} 条，复核是否由单一配置拉动。`,
+        action: "brand",
+        actionLabel: "筛选品牌",
+        brand: brand.item.name,
+      });
+    }
+
+    const sameTierModels = data.models.filter((model) => (state.scope === "all" || model.inTop100) && hasSameThreeTierSeries(model));
+    if (sameTierModels.length) {
+      tasks.push({
+        id: `condition-collision-${state.scope}`,
+        severity: "P1",
+        tag: "成色映射",
+        title: `复核 ${num(sameTierModels.length)} 款机型的三档成色同价`,
+        detail: `${scopeLabel()} · 靓机/小花/大花完整 7 日序列一致；优先检查成色映射、补价逻辑与源报价，不宜据此判断成色价差。`,
+        action: "model",
+        actionLabel: "查看首款",
+        modelId: sameTierModels[0].id,
+      });
+    }
+
+    const quality = currentQuality();
+    const scopeQuality = statsFor(state.scope);
+    const coverage = scopeQuality.coverage ?? quality.coverage;
+    const matchedRate = scopeQuality.matchedRate ?? quality.matchedRate;
+    const zeroSkus = scopeQuality.zeroSkus ?? quality.zeroQuotes;
+    if (coverage < 90 || matchedRate < 85) {
+      tasks.push({
+        id: `coverage-${currentDate().date}-${state.scope}`,
+        severity: "P1",
+        tag: "数据缺口",
+        title: `补齐 ${num(zeroSkus)} 条无价记录`,
+        detail: `${scopeLabel()} · ${currentDate().label} 有价率 ${fixed(coverage, 1)}%，两日匹配 ${fixed(matchedRate, 1)}%。`,
+        action: "quality",
+        actionLabel: "查看体检",
+      });
+    }
+
+    const gap = Math.max(0, TARGET_MODELS - Number(data.meta.totalModels || 0));
+    if (gap > 0) {
+      tasks.push({
+        id: "pool-gap",
+        severity: "P2",
+        tag: "代理解析",
+        title: `目标池缺口 ${num(gap)} 款机型`,
+        detail: `目标 ${num(TARGET_MODELS)} 款，当前 ${num(data.meta.totalModels)} 款；区分未接入、已下线与无有效报价。`,
+        action: "pool",
+        actionLabel: "查看口径",
+      });
+    }
+    return tasks;
+  }
+
+  function renderOps() {
+    const list = $("#opsList");
+    if (!list) return;
+    const done = readOpsDone();
+    const tasks = buildOpsTasks().filter((task) => !done.has(task.id));
+    $("#opsPending").textContent = num(tasks.length);
+    if (!tasks.length) {
+      list.innerHTML = `<div class="ops-empty"><strong>今日触发项已全部核验</strong><span>重置后可重新查看完整清单。</span></div>`;
+      return;
+    }
+    list.innerHTML = tasks.map((task) => `<article class="ops-item ops-${task.severity.toLowerCase()}" data-ops-id="${escapeHtml(task.id)}">
+      <div class="ops-item-top"><span class="ops-priority">${task.severity}</span><span class="ops-tag">${escapeHtml(task.tag)}</span><span class="ops-status">待核验</span></div>
+      <strong>${escapeHtml(task.title)}</strong>
+      <p>${escapeHtml(task.detail)}</p>
+      <div class="ops-item-actions"><button type="button" data-ops-action="${task.action}" data-ops-id="${escapeHtml(task.id)}" ${task.modelId ? `data-ops-model="${escapeHtml(task.modelId)}"` : ""} ${task.brand ? `data-ops-brand="${escapeHtml(task.brand)}"` : ""}>${task.actionLabel}</button><button type="button" class="ops-done" data-ops-done="${escapeHtml(task.id)}">标记已核验</button></div>
+    </article>`).join("");
+  }
+
+  function runOpsAction(button) {
+    const action = button.dataset.opsAction;
+    if (action === "anomaly") {
+      state.sort = "anomaly";
+      state.visibleCount = defaultVisibleCount();
+      renderTable();
+      syncControls();
+      scrollToSection("models");
+    } else if (action === "model") {
+      openDrawer(button.dataset.opsModel);
+    } else if (action === "brand") {
+      state.brand = button.dataset.opsBrand;
+      state.visibleCount = defaultVisibleCount();
+      renderAll();
+      scrollToSection("models");
+    } else if (action === "quality") {
+      scrollToSection("quality");
+    } else if (action === "pool") {
+      openMethods();
+    }
+  }
+
   function renderMarketChart() {
     const container = $("#marketChart");
     if (!container) return;
@@ -523,7 +781,7 @@
         const ratio = Math.min(1, Math.abs(value) / 3);
         const alpha = 0.055 + ratio * 0.34;
         const background = value > 0 ? `rgba(217,79,53,${alpha})` : value < 0 ? `rgba(20,118,95,${alpha})` : "rgba(233,228,215,.6)";
-        const color = ratio > 0.72 ? "#fffaf4" : value > 0 ? "#642014" : value < 0 ? "#084a3c" : "var(--muted)";
+        const color = value > 0 ? "#642014" : value < 0 ? "#084a3c" : "var(--muted)";
         return `<div class="heat-cell ${directionName(value)}" data-heat-brand="${escapeHtml(brand.name)}" data-heat-condition="${condition}" tabindex="0" role="button" aria-label="筛选 ${escapeHtml(brand.name)} ${condition}" style="background:${background};color:${color}" title="${escapeHtml(brand.name)} · ${condition}：${signedPercent(value)}，样本 ${normal} 条">${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(2)}</div>`;
       }).join("")}`;
     }).join("");
@@ -629,6 +887,7 @@
     renderTape();
     renderKpis();
     renderTop100Band();
+    renderOps();
     renderMarketChart();
     renderLegend();
     renderSignals();
@@ -683,10 +942,11 @@
     if (!model) return;
     state.drawerModelId = model.id;
     state.drawerTrigger = document.activeElement;
-    state.drawerCondition = state.condition !== "全部" && priceAt(model, state.condition, state.dateIndex) !== null ? state.condition : rowCondition(model) || model.primaryCondition;
+    state.drawerMemory = modelMemories(model).includes(model.mainMemory) ? model.mainMemory : modelMemories(model)[0];
+    state.drawerCondition = state.condition !== "全部" && configPriceAt(model, state.drawerMemory, state.condition, state.dateIndex) !== null ? state.condition : rowCondition(model) || model.primaryCondition;
     $("#drawerTitle").textContent = model.model;
     $("#drawerBrand").textContent = model.brand;
-    $("#drawerMemory").textContent = model.mainMemory;
+    $("#drawerMemory").textContent = state.drawerMemory;
     $("#drawerDate").textContent = `${longDate(currentDate().date)} · ${currentDate().weekday}`;
     renderDrawer();
     const backdrop = $("#drawerBackdrop");
@@ -730,30 +990,69 @@
   function renderDrawer() {
     const model = modelById(state.drawerModelId);
     if (!model) return;
+    const memories = modelMemories(model);
+    let memory = memories.includes(state.drawerMemory) ? state.drawerMemory : memories.includes(model.mainMemory) ? model.mainMemory : memories[0];
     let condition = state.drawerCondition;
-    if (!priceAt(model, condition, state.dateIndex)) {
-      condition = CONDITIONS.find((item) => priceAt(model, item, state.dateIndex) !== null) || model.primaryCondition;
-      state.drawerCondition = condition;
+    if (configPriceAt(model, memory, condition, state.dateIndex) === null) {
+      const fallbackMemory = memories.find((item) => configPriceAt(model, item, condition, state.dateIndex) !== null);
+      if (fallbackMemory) memory = fallbackMemory;
+      condition = CONDITIONS.find((item) => configPriceAt(model, memory, item, state.dateIndex) !== null) || model.primaryCondition;
     }
-    const history = model.conditions[condition];
-    const price = priceAt(model, condition, state.dateIndex);
-    const previousPrice = state.dateIndex > 0 ? priceAt(model, condition, state.dateIndex - 1) : null;
+    state.drawerMemory = memory;
+    state.drawerCondition = condition;
+    const history = configFor(model, memory)[condition] || [];
+    const price = configPriceAt(model, memory, condition, state.dateIndex);
+    const previousPrice = state.dateIndex > 0 ? configPriceAt(model, memory, condition, state.dateIndex - 1) : null;
     const dailyChange = price && previousPrice ? percentChange(price, previousPrice) : state.dateIndex === 0 ? 0 : null;
     const changeAmount = price && previousPrice ? price - previousPrice : null;
-    $("#drawerCondition").textContent = `${condition} · 当前价`;
+    const configMode = data.meta.configDataMode === "synthetic-demo" ? "演示配置阶梯" : "真实多内存报价";
+    $("#drawerMemory").textContent = `${memory}${memory === model.mainMemory ? " · 主配置" : ""}`;
+    $("#drawerConfigMode").textContent = configMode;
+    $("#drawerCondition").textContent = `${memory} · ${condition} · 当前价`;
     $("#drawerPrice").textContent = price ? `¥${num(price)}` : "—";
     const delta = $("#drawerChange");
     delta.textContent = dailyChange === null ? "—" : `${signedPercent(dailyChange)} / ${signedMoney(changeAmount)}`;
     delta.className = `price-delta ${directionClass(dailyChange)}`;
     const note = $(".drawer-price-block small");
     if (note) note.textContent = state.dateIndex === 0 ? "基准日 · 暂无前一交易日" : "较上一交易日";
-    $("#drawerConditionTabs").innerHTML = CONDITIONS.map((item) => `<button type="button" data-drawer-condition="${item}" class="${item === condition ? "is-active" : ""}" ${priceAt(model, item, state.dateIndex) === null ? "disabled" : ""}>${item}</button>`).join("");
-    const ladderPrices = CONDITIONS.map((item) => ({ name: item, price: priceAt(model, item, state.dateIndex) })).filter((item) => item.price !== null);
-    const maxPrice = Math.max(...ladderPrices.map((item) => item.price), 1);
-    $("#conditionLadder").innerHTML = CONDITIONS.map((item) => {
-      const itemPrice = priceAt(model, item, state.dateIndex);
-      return `<div class="ladder-row ${itemPrice === null ? "is-disabled" : ""}" data-ladder-condition="${item}"><span class="ladder-name"><i style="background:${conditionColor(item)}"></i>${item}</span><span class="ladder-bar"><span style="width:${itemPrice ? Math.max(5, (itemPrice / maxPrice) * 100) : 0}%;background:${conditionColor(item)}"></span></span><span class="ladder-price">${itemPrice ? `¥${num(itemPrice)}` : "暂无报价"}</span></div>`;
-    }).join("");
+    $("#drawerMemoryOptions").innerHTML = memories.map((item) => `<button type="button" data-drawer-memory="${escapeHtml(item)}" class="${item === memory ? "is-active" : ""}" aria-pressed="${item === memory}"><span>${escapeHtml(item)}</span>${item === model.mainMemory ? "<small>主配置</small>" : ""}</button>`).join("");
+    $("#drawerConditionTabs").innerHTML = CONDITIONS.map((item) => `<button type="button" data-drawer-condition="${item}" class="${item === condition ? "is-active" : ""}" aria-pressed="${item === condition}" ${configPriceAt(model, memory, item, state.dateIndex) === null ? "disabled" : ""}>${item}</button>`).join("");
+
+    const stats = quoteStats(history, state.dateIndex);
+    $("#quoteReferenceTitle").textContent = `${model.model} · ${memory} · ${condition}`;
+    $("#drawerQuoteMedian").textContent = stats.median === null ? "—" : `¥${num(Math.round(stats.median))}`;
+    $("#drawerQuoteRange").textContent = stats.low === null ? "—" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`;
+    $("#drawerQuoteSample").textContent = `${stats.sample}/7 天`;
+    $("#drawerQuoteDate").textContent = longDate(currentDate().date);
+    $("#quoteConfigModeNote").textContent = configMode;
+    const position = price && stats.min !== null && stats.max !== null ? (stats.max === stats.min ? "当前价位于窗口高位" : price <= stats.low ? "当前价低于近7日P25" : price >= stats.high ? "当前价高于近7日P75" : "当前价位于近7日区间内") : "暂无可比窗口";
+    const volatility = stats.min !== null && stats.max !== null && stats.median ? ((stats.max - stats.min) / stats.median) * 100 : null;
+    $("#drawerQuotePosition").textContent = position;
+    $("#drawerQuoteVolatility").textContent = volatility === null ? "波动区间不足" : `近7日振幅 ${fixed(volatility, 1)}%`;
+    const quoteReference = $("#quoteReference");
+    let qualityWarning = $("#drawerQualityWarning", quoteReference);
+    if (!qualityWarning) {
+      qualityWarning = document.createElement("p");
+      qualityWarning.id = "drawerQualityWarning";
+      qualityWarning.className = "quote-quality-warning";
+      qualityWarning.setAttribute("role", "note");
+      $(".quote-risk-line", quoteReference)?.insertAdjacentElement("afterend", qualityWarning);
+    }
+    const tierPrices = THREE_TIER_CONDITIONS.map((item) => configPriceAt(model, memory, item, state.dateIndex));
+    const hasTierCollision = tierPrices.every((value) => value !== null) && new Set(tierPrices).size === 1;
+    qualityWarning.hidden = !hasTierCollision;
+    qualityWarning.textContent = hasTierCollision ? `数据提醒：${memory} 的靓机、小花、大花当前同价，请复核成色映射或源报价，暂不据此判断成色价差。` : "";
+    $("#quoteReference").classList.toggle("is-demo-config", data.meta.configDataMode === "synthetic-demo");
+    $("#drawerDataNote").textContent = data.meta.configDataMode === "synthetic-demo" ? "当前报价矩阵为演示配置阶梯；主配置使用真实脱敏行情，其他内存按可见阶梯估算。接入真实多内存报价后自动替换。" : "缺失日不会被按 0 或降价处理；报价参考仅用于议价决策，不替代成交价、库存和毛利核算。";
+    const watchButton = $("[data-quote-watch]");
+    const watched = isWatched(model, memory, condition);
+    if (watchButton) {
+      watchButton.textContent = watched ? "已关注 SKU" : "关注 SKU";
+      watchButton.setAttribute("aria-pressed", String(watched));
+      watchButton.classList.toggle("is-active", watched);
+    }
+
+    renderSkuMatrix(model, memory, condition);
     const visibleHistory = history.map((value, index) => (index <= state.dateIndex ? value : null));
     const firstPrice = visibleHistory.find((value) => value !== null);
     const windowChange = firstPrice && price ? percentChange(price, firstPrice) : state.dateIndex === 0 ? 0 : null;
@@ -763,6 +1062,73 @@
     $("#drawerCoverage").textContent = `${coverageDays}/7 天`;
     $("#drawerRank").textContent = model.inTop100 ? `TOP ${model.top100Rank}` : "全量";
     drawDrawerChart(visibleHistory, conditionColor(condition), state.dateIndex);
+  }
+
+  function renderSkuMatrix(model, selectedMemory, selectedCondition) {
+    const container = $("#skuMatrix");
+    if (!container) return;
+    const memories = modelMemories(model);
+    const headers = CONDITIONS.map((condition) => `<th scope="col">${condition}</th>`).join("");
+    const body = memories.map((memory) => {
+      const cells = CONDITIONS.map((condition) => {
+        const value = configPriceAt(model, memory, condition, state.dateIndex);
+        const previous = state.dateIndex > 0 ? configPriceAt(model, memory, condition, state.dateIndex - 1) : null;
+        const change = value && previous ? percentChange(value, previous) : null;
+        const selected = memory === selectedMemory && condition === selectedCondition;
+        return `<td><button type="button" class="matrix-cell ${selected ? "is-selected" : ""}" data-matrix-memory="${escapeHtml(memory)}" data-matrix-condition="${condition}" aria-pressed="${selected}" aria-label="${escapeHtml(model.model)} ${escapeHtml(memory)} ${condition} ${value ? `¥${num(value)}` : "暂无报价"}"><span>${value ? `¥${num(value)}` : "—"}</span><small class="${directionClass(change)}">${change === null ? "无日涨跌" : signedPercent(change)}</small></button></td>`;
+      }).join("");
+      return `<tr class="${memory === selectedMemory ? "is-selected" : ""}"><th scope="row"><button type="button" class="matrix-memory" data-matrix-memory="${escapeHtml(memory)}" aria-pressed="${memory === selectedMemory}" aria-label="切换至 ${escapeHtml(memory)} 内存配置">${escapeHtml(memory)}${memory === model.mainMemory ? "<small>主配置</small>" : ""}</button></th>${cells}</tr>`;
+    }).join("");
+    container.innerHTML = `<table class="sku-matrix"><caption class="sr-only">${escapeHtml(model.model)} 内存与成色报价矩阵</caption><thead><tr><th scope="col">内存</th>${headers}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function drawerSelection() {
+    const model = modelById(state.drawerModelId);
+    if (!model) return null;
+    const memory = state.drawerMemory || model.mainMemory;
+    const condition = state.drawerCondition || model.primaryCondition;
+    const price = configPriceAt(model, memory, condition, state.dateIndex);
+    const stats = quoteStats(configFor(model, memory)[condition] || [], state.dateIndex);
+    return { model, memory, condition, price, stats };
+  }
+
+  async function copyQuoteSummary() {
+    const selection = drawerSelection();
+    if (!selection) return;
+    const { model, memory, condition, price, stats } = selection;
+    const summary = `${model.model} ${memory} ${condition}｜参考价 ${price ? `¥${num(price)}` : "暂无"}｜7日中位 ${stats.median === null ? "暂无" : `¥${num(Math.round(stats.median))}`}｜P25–P75 ${stats.low === null ? "暂无" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`}｜数据截至 ${currentDate().date}｜行情参考，非成交价`;
+    try {
+      await navigator.clipboard.writeText(summary);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = summary;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    showToast("报价摘要已复制");
+  }
+
+  function exportSelectedSku() {
+    const selection = drawerSelection();
+    if (!selection) return;
+    const { model, memory, condition } = selection;
+    const history = configFor(model, memory);
+    const headers = ["业务日期", "机型ID", "机型", "品牌", "内存", ...CONDITIONS];
+    const rows = data.dates.map((date, index) => [date.date, model.modelId, model.model, model.brand, memory, ...CONDITIONS.map((item) => history[item]?.[index] ?? "")]);
+    const csv = `\uFEFF${[headers, ...rows].map((line) => line.map(csvCell).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${model.model.replace(/[\\/:*?"<>|]/g, "_")}_${memory}_${condition}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    showToast("已导出当前 SKU 报价明细");
   }
 
   function drawDrawerChart(values, color, selectedIndex) {
@@ -857,6 +1223,20 @@
 
   function bindEvents() {
     document.addEventListener("click", (event) => {
+      const opsDone = event.target.closest("[data-ops-done]");
+      if (opsDone) {
+        const done = readOpsDone();
+        done.add(opsDone.dataset.opsDone);
+        writeOpsDone(done);
+        renderOps();
+        showToast("已标记核验，待办数量已更新");
+        return;
+      }
+      const opsAction = event.target.closest("[data-ops-action]");
+      if (opsAction) {
+        runOpsAction(opsAction);
+        return;
+      }
       const scopeButton = event.target.closest("[data-scope]");
       if (scopeButton) {
         setScope(scopeButton.dataset.scope);
@@ -959,13 +1339,32 @@
       state.drawerCondition = button.dataset.drawerCondition;
       renderDrawer();
     });
-    $("#conditionLadder").addEventListener("click", (event) => {
-      const row = event.target.closest("[data-ladder-condition]");
-      if (!row) return;
-      const model = modelById(state.drawerModelId);
-      if (!model || priceAt(model, row.dataset.ladderCondition, state.dateIndex) === null) return;
-      state.drawerCondition = row.dataset.ladderCondition;
+    $("#drawerMemoryOptions").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-drawer-memory]");
+      if (!button) return;
+      state.drawerMemory = button.dataset.drawerMemory;
       renderDrawer();
+    });
+    $("#skuMatrix").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-matrix-memory]");
+      if (!button) return;
+      const model = modelById(state.drawerModelId);
+      if (!model) return;
+      state.drawerMemory = button.dataset.matrixMemory;
+      if (button.dataset.matrixCondition) state.drawerCondition = button.dataset.matrixCondition;
+      renderDrawer();
+    });
+    $("[data-quote-copy]").addEventListener("click", copyQuoteSummary);
+    $("[data-quote-watch]").addEventListener("click", toggleSkuWatch);
+    $("[data-quote-export]").addEventListener("click", exportSelectedSku);
+    $("[data-ops-reset]").addEventListener("click", () => {
+      try {
+        localStorage.removeItem(opsStorageKey());
+      } catch {
+        // Local storage is optional in privacy-restricted browsers.
+      }
+      renderOps();
+      showToast("已重置核验状态");
     });
     $("#methodDialog").addEventListener("click", (event) => {
       if (event.target === $("#methodDialog")) closeMethods();
@@ -989,7 +1388,7 @@
       target.click();
     });
 
-    const sections = ["overview", "brands", "models", "quality"];
+    const sections = ["overview", "brands", "models", "ops", "quality"];
     const observer = new IntersectionObserver((entries) => {
       const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
       if (visible) setActiveNavigation(visible.target.id);

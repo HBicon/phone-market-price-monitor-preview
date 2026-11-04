@@ -46,6 +46,17 @@ def transform_payload(payload):
                 for value in history
             ]
         model["conditions"] = rounded
+        if model.get("configs"):
+            model["configs"] = {
+                memory: {
+                    condition: [
+                        max(1, round(value * factor)) if value is not None else None
+                        for value in history
+                    ]
+                    for condition, history in conditions.items()
+                }
+                for memory, conditions in model["configs"].items()
+            }
         primary = model.get("primaryCondition", "靓机")
         latest = next((value for value in reversed(rounded.get(primary, [])) if value is not None), 0)
         previous = next((value for value in reversed(rounded.get(primary, [])[:-1]) if value is not None), 0)
@@ -59,6 +70,9 @@ def transform_payload(payload):
     payload["meta"]["demo"] = True
     payload["meta"]["note"] = "基于真实 7 日报价结构脱敏生成；价格绝对值已做不可逆比例变换，保留日涨跌结构与异常隔离逻辑，仅用于 UI 评审。"
     payload["meta"]["publicDemo"] = True
+    payload["meta"].setdefault("targetModels", 1000)
+    payload["meta"].setdefault("configDataMode", "actual")
+    payload["meta"].setdefault("configNote", "机型详情按真实内存配置展示 7 日行情与成色矩阵。")
     return payload
 
 

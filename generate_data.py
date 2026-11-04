@@ -43,6 +43,13 @@ def round_price(value):
     return int(round(value))
 
 
+def memory_sort_key(memory):
+    import re
+
+    numbers = [int(value) for value in re.findall(r"\d+", str(memory))]
+    return (numbers[-1] if numbers else 0, numbers[0] if numbers else 0, str(memory))
+
+
 def load_day(path: Path):
     workbook = load_workbook(path, read_only=False, data_only=True)
     sheet = workbook.active
@@ -289,6 +296,16 @@ def build_models(dates, snapshots, model_meta, top100_ids, top100_rank):
             if best_score is None or score > best_score:
                 best_score = score
                 best_memory = memory
+        configs = {}
+        for memory in sorted(memories, key=memory_sort_key):
+            memory_history = {}
+            for condition in CONDITIONS:
+                condition_history = []
+                for date in dates:
+                    value = snapshots[date].get((model_id, memory, condition), 0)
+                    condition_history.append(round_price(value) if value > 0 else None)
+                memory_history[condition] = condition_history
+            configs[memory] = memory_history
         history = {}
         latest_prices = {}
         coverage = 0
@@ -331,6 +348,7 @@ def build_models(dates, snapshots, model_meta, top100_ids, top100_rank):
             "inTop100": model_id in top100_ids,
             "top100Rank": top100_rank.get(model_id),
             "conditions": history,
+            "configs": configs,
         })
     return models
 
@@ -479,6 +497,9 @@ def main():
             "top100": 100,
             "top100Definition": "近 7 日靓机连续有价，按最新靓机市场价从高到低取前 100 款。",
             "anomalyLimit": ANOMALY_LIMIT,
+            "targetModels": 1000,
+            "configDataMode": "actual",
+            "configNote": "机型详情按真实内存配置展示 7 日行情与成色矩阵。",
         },
         "dates": date_items,
         "market": {
