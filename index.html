@@ -3,15 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="手机市场行情监控看板原型：按日追踪机型、成色与品牌价格变化。"
-    />
+    <meta name="description" content="手机市场行情监控：按日追踪 891 个机型与 TOP100 重点机型的报价变化。" />
     <meta name="theme-color" content="#171a16" />
     <title>价脉 Price Pulse · 手机市场行情监控</title>
-    <link rel="stylesheet" href="styles.css?v=20261103g" />
-    <script src="assets/data.js?v=20261103g" defer></script>
-    <script src="app.js?v=20261103g" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20261104f" />
+    <script src="assets/data.js?v=20261104f" defer></script>
+    <script src="app.js?v=20261104f" defer></script>
   </head>
   <body>
     <div class="page-grain" aria-hidden="true"></div>
@@ -19,63 +16,43 @@
     <aside class="sidebar" aria-label="主导航">
       <a class="brand-lockup" href="#overview" aria-label="价脉首页">
         <span class="brand-glyph" aria-hidden="true">
-          <svg viewBox="0 0 34 34" role="img">
-            <path d="M5 24.5 12.4 15l5.1 5.3L29 6" />
-            <path d="M5 29h24" />
-          </svg>
+          <svg viewBox="0 0 34 34"><path d="M5 24.5 12.4 15l5.1 5.3L29 6"/><path d="M5 29h24"/></svg>
         </span>
-        <span class="brand-copy">
-          <strong>价脉</strong>
-          <small>PRICE PULSE</small>
-        </span>
+        <span class="brand-copy"><strong>价脉</strong><small>PRICE PULSE</small></span>
       </a>
-
       <div class="side-label">WORKSPACE</div>
       <nav class="side-nav">
         <button class="side-link is-active" data-scroll="overview">
-          <span class="side-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20"><path d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z"/></svg>
-          </span>
-          <span>行情总览</span>
-          <span class="nav-kbd">01</span>
+          <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z"/></svg></span>
+          <span>行情总览</span><span class="nav-kbd">01</span>
         </button>
         <button class="side-link" data-scroll="brands">
-          <span class="side-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20"><path d="M3 16V8M8 16V4M13 16V9M18 16V6"/></svg>
-          </span>
-          <span>品牌监控</span>
-          <span class="nav-kbd">02</span>
+          <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 16V8M8 16V4M13 16V9M18 16V6"/></svg></span>
+          <span>品牌监控</span><span class="nav-kbd">02</span>
         </button>
         <button class="side-link" data-scroll="models">
-          <span class="side-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 5h4M8 15h4"/></svg>
-          </span>
-          <span>机型监控</span>
-          <span class="nav-kbd">03</span>
+          <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 5h4M8 15h4"/></svg></span>
+          <span>TOP100</span><span class="nav-kbd">03</span>
         </button>
         <button class="side-link" data-scroll="quality">
-          <span class="side-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20"><path d="M10 2 17 5v5c0 4.2-2.9 6.8-7 8-4.1-1.2-7-3.8-7-8V5z"/><path d="m7 10 2 2 4-4"/></svg>
-          </span>
-          <span>数据体检</span>
-          <span class="nav-kbd">04</span>
+          <span class="side-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M10 2 17 5v5c0 4.2-2.9 6.8-7 8-4.1-1.2-7-3.8-7-8V5z"/><path d="m7 10 2 2 4-4"/></svg></span>
+          <span>数据体检</span><span class="nav-kbd">04</span>
         </button>
       </nav>
-
       <div class="sidebar-foot">
         <div class="live-block">
-          <div class="live-heading"><span class="live-dot"></span> 今日批次已入库</div>
+          <div class="live-heading"><span class="live-dot"></span> 最新批次已入库</div>
           <div class="live-score"><strong id="sideValidSkus">9,765</strong><span>有效报价</span></div>
           <div class="live-meter"><span id="sideCoverageBar"></span></div>
-          <div class="live-caption"><span>报价覆盖</span><span id="sideCoverage">75.0%</span></div>
+          <div class="live-caption"><span>最新日报价覆盖</span><span id="sideCoverage">75.0%</span></div>
         </div>
         <div class="demo-note">
-          <span class="demo-stamp">DEMO</span>
-          <p>基于 11.02 报价单结构生成的脱敏演示数据。</p>
+          <span class="demo-stamp">7D</span>
+          <p id="sideDateRange">10.27–11.02 · 7 个自然日报价快照。</p>
         </div>
         <div class="operator">
           <span class="operator-avatar">HZ</span>
-          <span><strong>行情运营</strong><small>市场分析工作台</small></span>
+          <span><strong>行情运营</strong><small>市场价格监控台</small></span>
           <span class="operator-status" title="在线"></span>
         </div>
       </div>
@@ -84,317 +61,196 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="mobile-brand">
-          <span class="brand-glyph" aria-hidden="true">
-            <svg viewBox="0 0 34 34"><path d="M5 24.5 12.4 15l5.1 5.3L29 6"/><path d="M5 29h24"/></svg>
-          </span>
+          <span class="brand-glyph" aria-hidden="true"><svg viewBox="0 0 34 34"><path d="M5 24.5 12.4 15l5.1 5.3L29 6"/><path d="M5 29h24"/></svg></span>
           <strong>价脉</strong>
         </div>
-        <div class="breadcrumb"><span>市场情报</span><i></i><strong>行情总览</strong></div>
+        <div class="breadcrumb"><span>市场情报</span><i></i><strong>行情监控</strong></div>
         <div class="topbar-tools">
           <button class="icon-button search-trigger" type="button" aria-label="搜索机型" data-search-trigger>
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.2"/><path d="m12.5 12.5 4 4"/></svg>
-            <span>搜索机型</span>
-            <kbd>⌘ K</kbd>
+            <span>搜索机型</span><kbd>⌘ K</kbd>
           </button>
-          <button class="icon-button hide-small" type="button" aria-label="消息提醒">
+          <button class="icon-button hide-small" type="button" aria-label="数据提醒">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 13.2H4.5l1.4-2V8a4.1 4.1 0 0 1 8.2 0v3.2zM8.2 16h3.6"/></svg>
             <span class="notification-dot"></span>
           </button>
-          <button class="date-chip" type="button" data-date-button>
-            <span class="date-chip-day">02</span>
-            <span><strong>11月</strong><small>2026 · 周一</small></span>
+          <label class="date-chip" title="切换业务日期">
+            <span class="date-chip-day" id="dateDay">02</span>
+            <span><strong id="dateMonth">11月</strong><small id="dateMeta">2026 · 周一</small></span>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
-          </button>
+            <select id="datePicker" aria-label="业务日期"></select>
+          </label>
         </div>
       </header>
 
-      <div class="market-tape" aria-label="品牌涨跌快报">
+      <section class="market-tape" aria-label="品牌涨跌快报">
         <div class="tape-label"><span></span> LIVE TAPE</div>
-        <div class="tape-window">
-          <div class="tape-track" id="marketTape"></div>
-        </div>
-        <div class="tape-time" id="tapeTime">UPDATED 15:41</div>
-      </div>
+        <div class="tape-window"><div class="tape-track" id="marketTape"></div></div>
+        <div class="tape-time" id="tapeTime">UPDATED 18:06</div>
+      </section>
 
       <main class="main-content">
-        <section class="hero" id="overview">
+        <section class="hero hero-compact" id="overview">
           <div class="hero-copy">
-            <div class="eyebrow"><span>DAILY MARKET BRIEF</span><i></i><span>NO. 1102</span></div>
-            <h1>每一块钱的波动，<br /><em>都应该被看见。</em></h1>
-            <p>以 <strong id="heroModelCount">891</strong> 个机型的每日报价为样本，追踪品牌、成色与单款机型的真实价格变化。</p>
+            <div class="eyebrow"><span>DAILY PRICE MONITORING</span><i></i><span>7-DAY VIEW</span></div>
+            <h1>价格在动，<em>先看重点。</em></h1>
+            <p><strong id="heroModelCount">891</strong> 个在榜机型 · 近 7 日 <strong id="heroTotalSkus">65,040</strong> 条有效报价；全量行情与 TOP100 重点池分开观察。 <span class="demo-inline" id="demoInline">公网演示 · 价格已脱敏</span></p>
           </div>
           <div class="hero-aside">
             <div class="brief-status">
-              <span class="brief-label">MARKET STATUS</span>
-              <div class="brief-line"><span class="live-dot"></span><strong>行情已更新</strong></div>
-              <span class="brief-time">2026.11.02 / 15:41 CST</span>
+              <span class="brief-label">DATA WINDOW</span>
+              <div class="brief-line"><span class="live-dot"></span><strong id="heroDateStatus">11月2日行情已更新</strong></div>
+              <span class="brief-time" id="heroDateRange">2026.10.27–11.02 / 18:06 CST</span>
             </div>
             <div class="hero-rule"></div>
             <div class="hero-stat">
-              <span>今日有效报价</span>
+              <span>最新有效报价</span>
               <strong id="heroValidSkus">9,765</strong>
               <small><b id="heroCoverage">75.0%</b> 有价率</small>
             </div>
           </div>
         </section>
 
-        <section class="control-strip" aria-label="看板筛选">
-          <div class="condition-filter" role="group" aria-label="成色筛选">
-            <span class="control-label">成色</span>
-            <button class="condition-pill is-active" type="button" data-condition="全部">全部</button>
-            <button class="condition-pill" type="button" data-condition="靓机"><i class="dot dot-perfect"></i>靓机</button>
-            <button class="condition-pill" type="button" data-condition="小花"><i class="dot dot-small"></i>小花</button>
-            <button class="condition-pill" type="button" data-condition="大花"><i class="dot dot-large"></i>大花</button>
-            <button class="condition-pill" type="button" data-condition="外爆"><i class="dot dot-outside"></i>外爆</button>
-            <button class="condition-pill" type="button" data-condition="内爆"><i class="dot dot-inside"></i>内爆</button>
+        <section class="control-strip control-strip-v2" aria-label="看板筛选">
+          <div class="control-cluster">
+            <span class="control-label">范围</span>
+            <div class="scope-switch" role="group" aria-label="统计范围">
+              <button class="scope-button is-active" type="button" data-scope="all">全量 <strong id="allScopeCount">891</strong></button>
+              <button class="scope-button" type="button" data-scope="top100">TOP100</button>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="condition-filter" role="group" aria-label="成色筛选">
+              <button class="condition-pill is-active" type="button" data-condition="全部">全部</button>
+              <button class="condition-pill" type="button" data-condition="靓机"><i class="dot dot-perfect"></i>靓机</button>
+              <button class="condition-pill" type="button" data-condition="小花"><i class="dot dot-small"></i>小花</button>
+              <button class="condition-pill" type="button" data-condition="大花"><i class="dot dot-large"></i>大花</button>
+              <button class="condition-pill" type="button" data-condition="外爆"><i class="dot dot-outside"></i>外爆</button>
+              <button class="condition-pill" type="button" data-condition="内爆"><i class="dot dot-inside"></i>内爆</button>
+            </div>
           </div>
-          <div class="period-switch" role="group" aria-label="时间范围">
-            <button type="button" data-period="7">7D</button>
-            <button class="is-active" type="button" data-period="30">30D</button>
-          </div>
+          <div class="period-chip"><span>数据窗口</span><strong>10.27–11.02</strong><em>7D</em></div>
         </section>
 
         <section class="metric-grid" aria-label="核心指标">
           <article class="metric-card metric-primary">
-            <div class="metric-topline"><span id="metricIndexLabel">市场基准指数</span><span class="metric-code">PPI · 01</span></div>
-            <div class="metric-value-row">
-              <strong class="metric-value" id="marketIndex">99.64</strong>
-              <span class="metric-change is-down" id="marketChange">−0.33%</span>
-            </div>
-            <div class="metric-foot">
-              <span>较上一交易日</span>
-              <span class="mini-spark" id="marketSpark"></span>
-            </div>
+            <div class="metric-topline"><span id="metricIndexLabel">全量市场指数</span><span class="metric-code">PRICE INDEX · 01</span></div>
+            <div class="metric-value-row"><strong class="metric-value" id="marketIndex">99.02</strong><span class="metric-change is-up" id="marketChange">+2.54%</span></div>
+            <div class="metric-foot"><span id="metricIndexFoot">较上一交易日 · 剔除 ±30% 跳价</span><span class="mini-spark" id="marketSpark"></span></div>
           </article>
           <article class="metric-card">
-            <div class="metric-topline"><span>涨跌结构</span><span class="metric-code">BREADTH · 02</span></div>
-            <div class="breadth-numbers">
-              <div><span class="breadth-kicker up-text">上涨</span><strong id="upCount">4,512</strong></div>
-              <i></i>
-              <div><span class="breadth-kicker down-text">下跌</span><strong id="downCount">3,846</strong></div>
-            </div>
+            <div class="metric-topline"><span id="breadthLabel">涨跌结构 · SKU</span><span class="metric-code">BREADTH · 02</span></div>
+            <div class="breadth-numbers"><div><span class="breadth-kicker up-text">上涨</span><strong id="upCount">2,336</strong></div><i></i><div><span class="breadth-kicker down-text">下跌</span><strong id="downCount">1,164</strong></div></div>
             <div class="breadth-bar"><span class="breadth-up" id="upBar"></span><span class="breadth-flat" id="flatBar"></span><span class="breadth-down" id="downBar"></span></div>
-            <div class="metric-foot"><span>涨跌比 <b id="upDownRatio">1.17</b></span><span>另有 <b id="flatCount">1,407</b> 持平</span></div>
+            <div class="metric-foot"><span>涨跌比 <b id="upDownRatio">2.01</b></span><span>另有 <b id="flatCount">1,691</b> 持平</span></div>
           </article>
           <article class="metric-card">
-            <div class="metric-topline"><span>今日价格异动</span><span class="metric-code">SIGNALS · 03</span></div>
-            <div class="metric-value-row">
-              <strong class="metric-value" id="anomalyCount">272</strong>
-              <span class="metric-change is-warn" id="anomalyDelta">+31%</span>
-            </div>
-            <div class="metric-foot"><span>超过 30 日均值</span><span class="foot-mark"><i></i> 需关注 12 条</span></div>
+            <div class="metric-topline"><span id="anomalyLabel">价格异常 · 已隔离</span><span class="metric-code">OUTLIERS · 03</span></div>
+            <div class="metric-value-row"><strong class="metric-value" id="anomalyCount">649</strong><span class="metric-change is-warn" id="anomalyRatio">12.5%</span></div>
+            <div class="metric-foot"><span>单日涨跌超过 ±30%</span><span class="foot-mark"><i></i> 不计入指数</span></div>
           </article>
           <article class="metric-card">
-            <div class="metric-topline"><span>有效报价</span><span class="metric-code">COVERAGE · 04</span></div>
+            <div class="metric-topline"><span id="coverageLabel">最新报价覆盖</span><span class="metric-code">COVERAGE · 04</span></div>
             <div class="coverage-row">
-              <div>
-                <div class="metric-value-row"><strong class="metric-value" id="validSkus">9,765</strong><span class="unit">/ 13,020</span></div>
-                <div class="metric-foot"><span>零价 <b id="zeroQuotes">3,255</b></span><span>需补价</span></div>
-              </div>
+              <div><div class="metric-value-row"><strong class="metric-value" id="validSkus">9,765</strong><span class="unit" id="uniqueSkus">/ 13,020</span></div><div class="metric-foot"><span>零价 <b id="zeroQuotes">3,255</b></span><span>7日连续覆盖 <b id="continuousModels">494</b></span></div></div>
               <div class="small-ring" id="coverageRing"><span id="coverageRingText">75%</span></div>
             </div>
           </article>
         </section>
 
+        <section class="top100-band" aria-label="TOP100 重点池摘要">
+          <div class="top100-title"><span class="top100-mark">TOP<br />100</span><div><strong>重点机型池</strong><small>近 7 日靓机连续有价，按最新市场价排序</small></div></div>
+          <div class="top100-stat"><span>上涨</span><strong class="up-text" id="topUp">46</strong></div>
+          <div class="top100-stat"><span>下跌</span><strong class="down-text" id="topDown">13</strong></div>
+          <div class="top100-stat"><span id="topFlatLabel">持平</span><strong id="topFlat">41</strong></div>
+          <div class="top100-stat top100-index"><span id="topIndexLabel">TOP100 指数</span><strong id="topIndex">99.10</strong><small id="topChange" class="up-text">+1.61%</small></div>
+          <div class="top100-stat top100-week"><span id="topWeekLabel">期内累计</span><strong id="topWeek">−0.90%</strong></div>
+          <button class="top100-action" type="button" data-scope-select="top100">查看全部 100 款 <span>↗</span></button>
+        </section>
+
         <section class="dashboard-grid top-grid">
           <article class="panel chart-panel">
-            <header class="panel-header">
-              <div>
-                <div class="panel-kicker">PRICE MOVEMENT / 价格走势</div>
-                <h2>成色价格指数</h2>
-              </div>
-              <div class="panel-header-meta"><span class="base-date">BASE 2026.10.03 = 100</span><button class="more-button" type="button" aria-label="查看指标说明" data-method-open>?</button></div>
-            </header>
-            <div class="chart-summary">
-              <div><span id="chartSummaryLabel">全市场 · 30天</span><strong id="chartSummaryValue">99.64</strong><small id="chartSummaryDelta" class="down-text">−0.33%</small></div>
-              <div class="chart-summary-note" id="chartSummaryNote">靓机、大花成色同步走弱，外爆报价逆势回升。</div>
-            </div>
-            <div class="line-chart" id="marketChart" aria-label="成色价格指数折线图"></div>
+            <header class="panel-header"><div><div class="panel-kicker">PRICE MOVEMENT / 价格走势</div><h2 id="chartTitle">全量市场指数 · 近7日</h2></div><div class="panel-header-meta"><span class="base-date">BASE 2026.10.27 = 100</span><button class="more-button" type="button" data-method-open aria-label="查看指标说明">?</button></div></header>
+            <div class="chart-summary"><div><span id="chartSummaryLabel">全市场 · 7天</span><strong id="chartSummaryValue">99.02</strong><small id="chartSummaryDelta" class="up-text">+2.54%</small></div><div class="chart-summary-note" id="chartSummaryNote">日报价中位数指数；异常跳价不参与计算。</div></div>
+            <div class="line-chart" id="marketChart" role="img" aria-label="成色价格指数折线图"></div>
             <div class="chart-legend" id="chartLegend"></div>
           </article>
-
           <aside class="panel signal-panel">
-            <header class="panel-header signal-header">
-              <div>
-                <div class="panel-kicker">EDGE SIGNALS / 值得关注</div>
-                <h2>今天发生了什么</h2>
-              </div>
-              <span class="signal-count">03</span>
-            </header>
+            <header class="panel-header signal-header"><div><div class="panel-kicker">EDGE SIGNALS / 值得关注</div><h2>今天发生了什么</h2></div><span class="signal-count">03</span></header>
             <div class="signal-list" id="signalList"></div>
-            <button class="text-action signal-action" type="button" data-scroll-target="models">
-              <span id="signalActionText">查看全部 272 条异动</span> <span>↗</span>
-            </button>
+            <button class="text-action signal-action" type="button" data-scroll-target="models">查看当前范围机型 <span>↗</span></button>
           </aside>
         </section>
 
         <section class="dashboard-grid brand-grid" id="brands">
           <article class="panel heatmap-panel">
-            <header class="panel-header">
-              <div>
-                <div class="panel-kicker">BRAND PULSE / 品牌脉冲</div>
-                <h2>品牌 × 成色涨跌热力</h2>
-              </div>
-              <div class="heat-legend"><span>跌</span><i class="heat-scale"></i><span>涨</span><em>日涨跌幅</em></div>
-            </header>
-            <div class="heatmap-scroll">
-              <div class="heatmap" id="brandHeatmap"></div>
-            </div>
-            <div class="panel-caption"><span>点击品牌可联动筛选下方机型</span><span><b class="up-text">▲ 涨</b> · <b class="down-text">▼ 跌</b></span></div>
+            <header class="panel-header"><div><div class="panel-kicker">BRAND PULSE / 品牌脉冲</div><h2>品牌 × 成色涨跌热力</h2></div><div class="heat-legend"><span>跌</span><i class="heat-scale"></i><span>涨</span><em id="heatScopeLabel">全量口径 · 日涨跌幅</em></div></header>
+            <div class="heatmap-scroll"><div class="heatmap" id="brandHeatmap"></div></div>
+            <div class="panel-caption"><span>点击品牌或色块，联动筛选机型榜</span><span><b class="up-text">▲ 涨</b> · <b class="down-text">▼ 跌</b></span></div>
           </article>
-
           <article class="panel ranking-panel">
-            <header class="panel-header">
-              <div>
-                <div class="panel-kicker">BRAND RANKING / 品牌强弱</div>
-                <h2 id="brandRankingTitle">品牌日涨跌排行</h2>
-              </div>
-              <div class="ranking-sort">按日涨跌 <span>↓</span></div>
-            </header>
+            <header class="panel-header"><div><div class="panel-kicker">BRAND RANKING / 品牌强弱</div><h2 id="brandRankingTitle">品牌日涨跌排行</h2></div><div class="ranking-sort" id="rankingSortLabel">按日涨跌 <span>↓</span></div></header>
             <div class="brand-ranking" id="brandRanking"></div>
-            <div class="ranking-foot"><span><i class="legend-square up-bg"></i>上涨 SKU 占比</span><span><i class="legend-square down-bg"></i>下跌 SKU 占比</span></div>
+            <div class="ranking-foot"><span><i class="legend-square up-bg"></i>上涨</span><span><i class="legend-square down-bg"></i>下跌</span><span>样本少于 5 条标记为不足</span></div>
           </article>
         </section>
 
         <section class="panel movers-panel" id="models">
           <header class="panel-header movers-header">
-            <div>
-              <div class="panel-kicker">MODEL WATCH / 单款监测</div>
-              <h2>机型异动榜</h2>
-            </div>
-            <div class="movers-actions">
-              <button class="outline-button" type="button" data-export>
-                <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2v9M5.5 8 9 11.5 12.5 8M3 14h12"/></svg> 导出
-              </button>
-              <span class="updated-note"><i></i> 16:05 已刷新</span>
-            </div>
+            <div><div class="panel-kicker" id="modelPanelKicker">MODEL WATCH / TOP100 重点池</div><h2 id="modelPanelTitle">TOP100 机型涨跌榜</h2><p class="panel-note" id="modelPanelNote">固定重点池 · 按有效波动排序；点击行查看各成色走势。</p></div>
+            <div class="movers-actions"><span class="outlier-badge" id="outlierBadge"><i></i> 异常价已隔离</span><button class="outline-button" type="button" data-export><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2v9M5.5 8 9 11.5 12.5 8M3 14h12"/></svg> 导出</button></div>
           </header>
           <div class="table-toolbar">
-            <label class="table-search">
-              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.2"/><path d="m12.5 12.5 4 4"/></svg>
-              <input id="modelSearch" type="search" placeholder="搜索机型 / 品牌" autocomplete="off" />
-              <kbd>⌘ K</kbd>
-            </label>
+            <label class="table-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.2"/><path d="m12.5 12.5 4 4"/></svg><input id="modelSearch" type="search" placeholder="搜索机型 / 品牌 / 配置" autocomplete="off" /><kbd>⌘ K</kbd></label>
             <div class="toolbar-divider"></div>
             <select id="brandFilter" aria-label="品牌筛选"><option value="all">全部品牌</option></select>
-            <select id="conditionFilter" aria-label="成色筛选">
-              <option value="all">全部成色</option>
-              <option value="靓机">靓机</option>
-              <option value="小花">小花</option>
-              <option value="大花">大花</option>
-              <option value="外爆">外爆</option>
-              <option value="内爆">内爆</option>
-            </select>
-            <select id="sortFilter" aria-label="排序方式">
-              <option value="impact">按异动强度</option>
-              <option value="up">按涨幅从高到低</option>
-              <option value="down">按跌幅从高到低</option>
-              <option value="price">按价格从高到低</option>
-            </select>
+            <select id="sortFilter" aria-label="排序方式"><option value="impact">按有效波动</option><option value="up">按有效涨幅</option><option value="down">按有效跌幅</option><option value="anomaly">异常跳价优先</option><option value="price">按价格从高到低</option><option value="rank">按重点池排序</option></select>
             <button class="clear-filter" type="button" id="clearFilters" hidden>清除筛选</button>
           </div>
           <div class="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th class="col-model">机型</th>
-                  <th>品牌</th>
-                  <th>内存</th>
-                  <th>成色</th>
-                  <th class="align-right">今日价</th>
-                  <th class="align-right">日涨跌</th>
-                  <th class="align-right hide-tablet">7日</th>
-                  <th class="spark-col hide-tablet">30日走势</th>
-                  <th class="align-right hide-tablet">状态</th>
-                  <th class="chevron-col"></th>
-                </tr>
-              </thead>
+              <thead><tr><th class="rank-col" id="rankHeader">TOP</th><th class="col-model">机型</th><th>品牌</th><th>主配置</th><th>主成色</th><th class="align-right">当前价</th><th class="align-right">日涨跌</th><th class="align-right hide-tablet" id="windowHeader">期内</th><th class="spark-col hide-tablet">期内走势</th><th class="align-center hide-tablet">覆盖</th><th class="align-right hide-tablet">状态</th><th class="chevron-col"><span class="sr-only">操作</span></th></tr></thead>
               <tbody id="modelRows"></tbody>
             </table>
-            <div class="empty-state" id="emptyState" hidden>
-              <strong>没有匹配的机型</strong>
-              <span>试试减少筛选条件或更换关键词。</span>
-            </div>
+            <div class="mobile-table-hint">左右滑动表格，查看完整价格字段 →</div>
+            <div class="empty-state" id="emptyState" hidden><strong>没有匹配的机型</strong><span>试试减少筛选条件或更换关键词。</span></div>
           </div>
-          <div class="table-footer">
-            <span id="resultCount">显示 1–8 / 272 个异动 SKU</span>
-            <button class="text-action" type="button" id="loadMore">加载更多 <span>↓</span></button>
-          </div>
+          <div class="table-footer"><span id="resultCount">显示 1–12 / 100 款机型</span><button class="text-action" type="button" id="loadMore">加载更多 <span>↓</span></button></div>
         </section>
 
         <section class="quality-strip" id="quality">
-          <div class="quality-title">
-            <div class="panel-kicker">DATA HEALTH / 数据体检</div>
-            <h2>报价完整，数据可用。</h2>
-            <p>11月2日报价批次已通过唯一性与字段完整性校验。</p>
-          </div>
-          <div class="quality-metrics">
-            <div><span>入库完整度</span><strong>100%</strong><small>13,020 / 13,020</small></div>
-            <div><span>两日可匹配率</span><strong>96.4%</strong><small>较昨日 −0.8pp</small></div>
-            <div><span>重复记录</span><strong>0</strong><small>唯一键校验通过</small></div>
-            <div class="quality-warning"><span>零价待确认</span><strong>3,255</strong><small>建议补价流程跟进</small></div>
-          </div>
-          <button class="quality-action" type="button" data-method-open>查看口径 <span>↗</span></button>
+          <div class="quality-title"><div class="panel-kicker">DATA HEALTH / 数据体检</div><h2>7 天报价可用，异常不混入趋势。</h2><p id="qualitySummary">最新批次 13,020 条记录；内存缺失与零价单独隔离。</p></div>
+          <div class="quality-metrics"><div><span>7日有效记录</span><strong id="qualityTotalSkus">65,040</strong><small>7 份日报价单</small></div><div><span>最新两日可匹配</span><strong id="qualityMatchRate">78.7%</strong><small id="qualityMatchCount">5,191 条可比</small></div><div><span>内存缺失</span><strong id="qualityMissingMemory">20</strong><small>未进入机型比较</small></div><div class="quality-warning"><span>异常跳价</span><strong id="qualityAnomalies">649</strong><small>超过 ±30%，已隔离</small></div></div>
+          <button class="quality-action" type="button" data-method-open>查看完整口径 <span>↗</span></button>
+          <div class="quality-timeline" id="qualityTimeline" role="group" aria-label="7日有效报价趋势"></div>
         </section>
 
-        <footer class="page-footer">
-          <div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.1</span></div>
-          <p id="footerDemoNote">价格基于 11 月 2 日报价单结构生成，已做轻微扰动；趋势为演示数据。</p>
-          <span>本地评审版 · 2026.11.03</span>
-        </footer>
+        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.2</span></div><p id="footerDemoNote">基于 2026.10.27–11.02 七份报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.04</span></footer>
       </main>
     </div>
 
     <nav class="mobile-nav" aria-label="移动端导航">
       <button class="is-active" data-scroll="overview"><svg viewBox="0 0 20 20"><path d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z"/></svg><span>总览</span></button>
       <button data-scroll="brands"><svg viewBox="0 0 20 20"><path d="M3 16V8M8 16V4M13 16V9M18 16V6"/></svg><span>品牌</span></button>
-      <button data-scroll="models"><svg viewBox="0 0 20 20"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 5h4M8 15h4"/></svg><span>机型</span></button>
+      <button data-scroll="models"><svg viewBox="0 0 20 20"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 5h4M8 15h4"/></svg><span>TOP100</span></button>
       <button data-scroll="quality"><svg viewBox="0 0 20 20"><path d="M10 2 17 5v5c0 4.2-2.9 6.8-7 8-4.1-1.2-7-3.8-7-8V5z"/><path d="m7 10 2 2 4-4"/></svg><span>体检</span></button>
     </nav>
 
     <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
-    <aside class="detail-drawer" id="detailDrawer" aria-hidden="true" aria-label="机型价格详情">
-      <div class="drawer-head">
-        <div class="drawer-heading">
-          <span class="drawer-kicker">SKU DETAIL</span>
-          <h2 id="drawerTitle">机型详情</h2>
-          <div class="drawer-subline"><span id="drawerBrand"></span><i></i><span id="drawerMemory"></span><i></i><span>2026.11.02</span></div>
-        </div>
-        <button class="drawer-close" type="button" id="drawerClose" aria-label="关闭详情">
-          <svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg>
-        </button>
-      </div>
-      <div class="drawer-body">
-        <div class="drawer-price-block">
-          <span id="drawerCondition">靓机 · 当前价</span>
-          <div><strong id="drawerPrice">¥0</strong><span id="drawerChange" class="price-delta"></span></div>
-          <small>较上一交易日</small>
-        </div>
-        <div class="drawer-condition-tabs" id="drawerConditionTabs"></div>
-        <div class="drawer-chart-wrap"><div id="drawerChart" class="drawer-chart"></div></div>
-        <div class="drawer-section-head"><span>成色价格阶梯</span><small>同一机型 · 同一内存</small></div>
-        <div class="condition-ladder" id="conditionLadder"></div>
-        <div class="drawer-meta-grid">
-          <div><span>近 7 日</span><strong id="drawer7d">—</strong></div>
-          <div><span>近 30 日</span><strong id="drawer30d">—</strong></div>
-          <div><span>连续匹配</span><strong id="drawerMatched">—</strong></div>
-        </div>
-        <div class="drawer-note"><span>!</span><p>展示价格为脱敏演示数据。价格口径为同一机型、同一内存、同一成色下的每日有效报价。</p></div>
-      </div>
+    <aside class="detail-drawer" id="detailDrawer" aria-hidden="true" aria-label="机型价格详情" inert>
+      <div class="drawer-head"><div class="drawer-heading"><span class="drawer-kicker">MODEL DETAIL / 主配置口径</span><h2 id="drawerTitle">机型详情</h2><div class="drawer-subline"><span id="drawerBrand"></span><i></i><span id="drawerMemory"></span><i></i><span id="drawerDate">2026.11.02</span></div></div><button class="drawer-close" type="button" id="drawerClose" aria-label="关闭详情"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+      <div class="drawer-body"><div class="drawer-price-block"><span id="drawerCondition">靓机 · 当前价</span><div><strong id="drawerPrice">¥0</strong><span id="drawerChange" class="price-delta"></span></div><small>较上一交易日</small></div><div class="drawer-condition-tabs" id="drawerConditionTabs"></div><div class="drawer-chart-wrap"><div id="drawerChart" class="drawer-chart"></div></div><div class="drawer-section-head"><span>成色价格阶梯</span><small>同一机型 · 主配置</small></div><div class="condition-ladder" id="conditionLadder"></div><div class="drawer-meta-grid"><div><span>期内累计</span><strong id="drawer7d">—</strong></div><div><span>数据覆盖</span><strong id="drawerCoverage">—</strong></div><div><span>重点池</span><strong id="drawerRank">—</strong></div></div><div class="drawer-note"><span>!</span><p>展示同一机型、主配置、同一成色下的报价序列。缺失日不会被按 0 或降价处理。</p></div></div>
     </aside>
 
     <dialog class="method-dialog" id="methodDialog">
-      <div class="dialog-head">
-        <div><span class="panel-kicker">METHODOLOGY / 口径说明</span><h2>这组价格指数怎么算？</h2></div>
-        <button type="button" data-method-close aria-label="关闭口径说明"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
-      </div>
+      <div class="dialog-head"><div><span class="panel-kicker">METHODOLOGY / 口径说明</span><h2>这组行情指数怎么算？</h2></div><button type="button" data-method-close aria-label="关闭口径说明"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
       <div class="dialog-body">
-        <div class="method-step"><span>01</span><div><strong>先对齐唯一 SKU</strong><p>以「日期 + 机型 + 内存 + 成色」为唯一键，同一天仅保留一条有效报价。</p></div></div>
-        <div class="method-step"><span>02</span><div><strong>只比较同一 SKU</strong><p>日涨跌只计算两天都存在、且价格大于 0 的同一 SKU，避免 Top1000 换榜造成虚假波动。</p></div></div>
-        <div class="method-step"><span>03</span><div><strong>指数逐日链式累计</strong><p>用可比 SKU 的价格变化中位数累计为指数。品牌指数再按品牌内相同成色的 SKU 聚合。</p></div></div>
-        <div class="method-step"><span>04</span><div><strong>缺失不当作降价</strong><p>零价、缺失、退出榜单和样本不足均单独标记，不直接参与涨跌计算。</p></div></div>
+        <div class="method-step"><span>01</span><div><strong>对齐同一 SKU</strong><p>以「日期 + 机型 ID + 内存 + 成色」为唯一键；内存缺失和同日重复记录单独隔离。</p></div></div>
+        <div class="method-step"><span>02</span><div><strong>只比较相邻两日同一 SKU</strong><p>零价、退出榜单和缺失日期不当作降价；新进榜也不当作涨价。</p></div></div>
+        <div class="method-step"><span>03</span><div><strong>指数使用中位数并隔离跳价</strong><p>日涨跌超过 ±30% 视为异常跳价，不进入指数和品牌热力，仍保留在价格异常统计中。</p></div></div>
+        <div class="method-step"><span>04</span><div><strong>TOP100 为固定重点池</strong><p>选取近 7 日靓机连续有价、按最新靓机市场价排序的前 100 款机型；与全量口径分开计算。</p></div></div>
+        <div class="method-step"><span>05</span><div><strong>样本不足不输出强弱结论</strong><p>品牌或成色可比样本少于 5 条时标记“样本不足”，不进入排行结论。</p></div></div>
       </div>
-      <div class="dialog-foot"><span>原型演示口径，最终以数据团队指标字典为准。</span><button type="button" data-method-close>我知道了</button></div>
+      <div class="dialog-foot"><span id="methodFooterNote">当前为 7 日报价口径；指数仅反映报价变化，不等同成交量或利润。</span><button type="button" data-method-close>我知道了</button></div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

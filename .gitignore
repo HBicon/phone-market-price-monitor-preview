@@ -1,2 +1,4 @@
 .DS_Store
 assets/preview-*
+__pycache__/
+*.pyc
