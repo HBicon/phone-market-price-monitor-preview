@@ -6,9 +6,9 @@
     <meta name="description" content="手机市场行情监控：按日追踪 891 个机型与 TOP100 重点机型的报价变化。" />
     <meta name="theme-color" content="#171a16" />
     <title>价脉 Price Pulse · 手机市场行情监控</title>
-    <link rel="stylesheet" href="styles.css?v=20261104h" />
-    <script src="assets/data.js?v=20261104h" defer></script>
-    <script src="app.js?v=20261104h" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20261105a" />
+    <script src="assets/data.js?v=20261105a" defer></script>
+    <script src="app.js?v=20261105a" defer></script>
   </head>
   <body>
     <div class="page-grain" aria-hidden="true"></div>
@@ -171,6 +171,20 @@
           <button class="top100-action" type="button" data-scope-select="top100">查看全部 100 款 <span>↗</span></button>
         </section>
 
+        <section class="brief-band" aria-labelledby="briefTitle">
+          <div class="brief-lead">
+            <div class="brief-eyebrow"><span class="brief-flag">7D</span><span>MARKET BRIEF / 行情简报</span><em id="briefScope">全量 · 全成色 · 11.02</em></div>
+            <h2 id="briefTitle">全量日线走强，7日价格仍在修复</h2>
+            <p class="brief-summary" id="briefSummary">正在生成当前筛选口径的市场摘要。</p>
+            <div class="brief-facts" id="briefFacts"></div>
+          </div>
+          <aside class="brief-actions-panel" aria-label="运营行动建议">
+            <div class="brief-actions-head"><div><span>OPERATOR READOUT</span><strong>运营动作建议</strong></div><button type="button" class="brief-copy" data-brief-copy>复制简报 <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M6 5V2.5h9.5V12H13M2.5 6H12v9.5H2.5z"/></svg></button></div>
+            <ol class="brief-actions" id="briefActions"></ol>
+            <p class="brief-footnote" id="briefFootnote">报价参考，非成交价。</p>
+          </aside>
+        </section>
+
         <section class="ops-band" id="ops" aria-labelledby="opsTitle">
           <div class="ops-band-head">
             <div><div class="panel-kicker">OPS QUEUE / 今日待办</div><h2 id="opsTitle">从发现到处置，留一张可关闭的清单。</h2></div>
@@ -194,6 +208,37 @@
           </aside>
         </section>
 
+        <section class="dashboard-grid analysis-grid" aria-label="价格结构分析">
+          <article class="panel structure-panel">
+            <header class="panel-header"><div><div class="panel-kicker">PRICE STRUCTURE / 涨跌结构</div><h2 id="distributionTitle">涨跌以窄幅波动为主，方向尚未拉开</h2></div><span class="structure-scope" id="structureScope">主配置 · 全成色</span></header>
+            <div class="structure-columns">
+              <section class="structure-col" aria-labelledby="distributionLabel">
+                <div class="structure-col-head"><div><span id="distributionLabel">日涨跌分布</span><small id="distributionMeta">—</small></div><em>±30% 外隔离</em></div>
+                <div class="distribution-list" id="changeDistribution" role="list"></div>
+              </section>
+              <section class="structure-col" aria-labelledby="priceBandLabel">
+                <div class="structure-col-head"><div><span id="priceBandLabel">价格带压力</span><small id="priceBandMeta">—</small></div><em>当前有价</em></div>
+                <p class="price-band-title" id="priceBandTitle">正在聚合价格带样本。</p>
+                <div class="price-band-list" id="priceBands" role="list"></div>
+              </section>
+            </div>
+            <p class="structure-foot" id="structureFoot">主配置 × 当前成色；异常跳价不进入分布。</p>
+          </article>
+
+          <article class="panel cohort-panel">
+            <header class="panel-header"><div><div class="panel-kicker">FIXED COHORT / 固定队列</div><h2>同一批机型，价格有没有真正在动</h2></div><span class="cohort-badge" id="cohortBadge">靓机队列</span></header>
+            <div class="cohort-body">
+              <div class="cohort-main">
+                <div class="cohort-value"><span>固定队列指数</span><strong id="cohortIndex">100.00</strong><em id="cohortChange">—</em></div>
+                <div class="cohort-facts"><div><span>队列样本</span><strong id="cohortSample">—</strong></div><div><span>较同成色指数</span><strong id="cohortDiff">—</strong></div></div>
+              </div>
+              <div class="cohort-chart" id="cohortChart" role="img" aria-label="固定队列与同成色市场指数趋势"></div>
+              <div class="cohort-legend" id="cohortLegend"></div>
+            </div>
+            <p class="cohort-foot" id="cohortFoot">队列固定不随日期变化；按每日中位涨跌复利计算。</p>
+          </article>
+        </section>
+
         <section class="dashboard-grid brand-grid" id="brands">
           <article class="panel heatmap-panel">
             <header class="panel-header"><div><div class="panel-kicker">BRAND PULSE / 品牌脉冲</div><h2>品牌 × 成色涨跌热力</h2></div><div class="heat-legend"><span>跌</span><i class="heat-scale"></i><span>涨</span><em id="heatScopeLabel">全量口径 · 日涨跌幅</em></div></header>
@@ -201,7 +246,8 @@
             <div class="panel-caption"><span>点击品牌或色块，联动筛选机型榜</span><span><b class="up-text">▲ 涨</b> · <b class="down-text">▼ 跌</b></span></div>
           </article>
           <article class="panel ranking-panel">
-            <header class="panel-header"><div><div class="panel-kicker">BRAND RANKING / 品牌强弱</div><h2 id="brandRankingTitle">品牌日涨跌排行</h2></div><div class="ranking-sort" id="rankingSortLabel">按日涨跌 <span>↓</span></div></header>
+            <header class="panel-header"><div><div class="panel-kicker">BRAND BREADTH / 品牌广度</div><h2 id="brandRankingTitle">品牌日涨跌排行</h2></div><div class="ranking-sort" id="rankingSortLabel">按日涨跌 <span>↓</span></div></header>
+            <div class="brand-breadth-head" aria-hidden="true"><span></span><span></span><span>品牌 / 样本</span><span>指数</span><span>日变动</span><span>↑涨 / ↓跌 / —平</span></div>
             <div class="brand-ranking" id="brandRanking"></div>
             <div class="ranking-foot"><span><i class="legend-square up-bg"></i>上涨</span><span><i class="legend-square down-bg"></i>下跌</span><span>样本少于 5 条标记为不足</span></div>
           </article>
@@ -237,7 +283,7 @@
           <div class="quality-timeline" id="qualityTimeline" role="group" aria-label="7日有效报价趋势"></div>
         </section>
 
-        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.3</span></div><p id="footerDemoNote">基于 2026.10.27–11.02 七份报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.04</span></footer>
+        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.4</span></div><p id="footerDemoNote">基于 2026.10.27–11.02 七份报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.05</span></footer>
       </main>
     </div>
 
@@ -264,6 +310,7 @@
         <div class="method-step"><span>04</span><div><strong>TOP100 为固定重点池</strong><p>选取近 7 日靓机连续有价、按最新靓机市场价排序的前 100 款机型；与全量口径分开计算。</p></div></div>
         <div class="method-step"><span>05</span><div><strong>样本不足不输出强弱结论</strong><p>品牌或成色可比样本少于 5 条时标记“样本不足”，不进入排行结论。</p></div></div>
         <div class="method-step"><span>06</span><div><strong>报价矩阵与目标池</strong><p>买家按「内存 × 成色」查看参考价；目标池为 1,000 款，当前在榜 891 款，缺口 109 款单独进入运营待办。演示数据仅主配置使用真实脱敏行情，其他内存为演示阶梯，接入真实多内存报价后自动替换。</p></div></div>
+        <div class="method-step"><span>07</span><div><strong>结构分析与固定队列</strong><p>涨跌分布和价格带仅使用主配置报价；筛选“全部”时汇总五类成色观察，同一机型可有多成色记录。固定队列选取当前成色 7 日连续有价的同一批机型，按每日中位涨跌复利形成指数；筛选“全部”时明确采用靓机固定队列。</p></div></div>
       </div>
       <div class="dialog-foot"><span id="methodFooterNote">当前为 7 日报价口径；指数仅反映报价变化，不等同成交量或利润。</span><button type="button" data-method-close>我知道了</button></div>
     </dialog>

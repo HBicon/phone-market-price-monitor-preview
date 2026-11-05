@@ -15,6 +15,25 @@
     price: "按价格从高到低",
     rank: "按重点池排序",
   };
+  const CHANGE_BIN_DEFS = [
+    { label: "≤−10%", match: (value) => value <= -10, direction: "down" },
+    { label: "−10~−5%", match: (value) => value > -10 && value <= -5, direction: "down" },
+    { label: "−5~−2%", match: (value) => value > -5 && value <= -2, direction: "down" },
+    { label: "−2~0%", match: (value) => value > -2 && value < 0, direction: "down" },
+    { label: "0%", match: (value) => value === 0, direction: "flat" },
+    { label: "0~2%", match: (value) => value > 0 && value <= 2, direction: "up" },
+    { label: "2~5%", match: (value) => value > 2 && value <= 5, direction: "up" },
+    { label: "5~10%", match: (value) => value > 5 && value <= 10, direction: "up" },
+    { label: ">10%", match: (value) => value > 10, direction: "up" },
+  ];
+  const PRICE_BAND_DEFS = [
+    { label: "¥500 以下", short: "<500", min: 0, max: 500 },
+    { label: "¥500–999", short: "500–1K", min: 500, max: 1000 },
+    { label: "¥1,000–1,999", short: "1K–2K", min: 1000, max: 2000 },
+    { label: "¥2,000–2,999", short: "2K–3K", min: 2000, max: 3000 },
+    { label: "¥3,000–4,999", short: "3K–5K", min: 3000, max: 5000 },
+    { label: "¥5,000 以上", short: "≥5K", min: 5000, max: Infinity },
+  ];
   const SAMPLE_LIMIT = 5;
   const TARGET_MODELS = Number(data.meta.targetModels || 1000);
   const WATCHLIST_KEY = "price-pulse.watchlist.v1";
@@ -60,6 +79,12 @@
     const current = Math.round(Number(value));
     if (!current) return "¥0";
     return `${current > 0 ? "+" : "−"}¥${num(Math.abs(current))}`;
+  };
+  const signedIndexPoint = (value, digits = 2) => {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+    const current = Number(value);
+    const sign = current > 0 ? "+" : current < 0 ? "−" : "";
+    return `${sign}${Math.abs(current).toFixed(digits)}点`;
   };
   const directionClass = (value) => (Number(value) > 0 ? "up-text" : Number(value) < 0 ? "down-text" : "");
   const directionName = (value) => (Number(value) > 0 ? "is-positive" : Number(value) < 0 ? "is-negative" : "is-neutral");
@@ -153,10 +178,9 @@
     return CONDITIONS.find((condition) => priceAt(model, condition, index) !== null) || null;
   }
 
-  function buildModelRow(model, index = state.dateIndex) {
-    const condition = rowCondition(model, index);
-    if (!condition) return null;
+  function buildConditionRow(model, condition, index = state.dateIndex) {
     const history = model.conditions[condition];
+    if (!history) return null;
     const price = priceAt(model, condition, index);
     if (price === null) return null;
     const previousPrice = index > 0 ? priceAt(model, condition, index - 1) : null;
@@ -184,6 +208,11 @@
       isAnomaly,
       impact,
     };
+  }
+
+  function buildModelRow(model, index = state.dateIndex) {
+    const condition = rowCondition(model, index);
+    return condition ? buildConditionRow(model, condition, index) : null;
   }
 
   function allModelRows(index = state.dateIndex) {
@@ -323,7 +352,9 @@
   }
 
   function brandStatsFor(brand, scope = state.scope, index = state.dateIndex) {
-    const series = scope === "all" ? brand.stats : brand.top100Stats;
+    const record = typeof brand === "string" ? data.brands.find((item) => item.name === brand) : brand;
+    if (!record) return null;
+    const series = scope === "all" ? record.stats : record.top100Stats;
     return series[index] || series.at(-1);
   }
 
@@ -341,6 +372,219 @@
 
   function continuousModels(scope = state.scope) {
     return data.models.filter((model) => inScope(model, scope) && model.conditions["靓机"].every((value) => value !== null)).length;
+  }
+
+  function analysisRows(index = state.dateIndex) {
+    const models = data.models.filter((model) => inScope(model));
+    if (state.condition !== "全部") return models.map((model) => buildConditionRow(model, state.condition, index)).filter(Boolean);
+    return models.flatMap((model) => CONDITIONS.map((condition) => buildConditionRow(model, condition, index))).filter(Boolean);
+  }
+
+  function analysisConditionNote() {
+    return state.condition === "全部" ? "五类成色观察" : state.condition;
+  }
+
+  function changeDistributionData(rows = analysisRows()) {
+    const comparable = rows.filter((row) => row.change !== null);
+    const excluded = comparable.filter((row) => row.isAnomaly);
+    const valid = comparable.filter((row) => !row.isAnomaly);
+    const values = valid.map((row) => row.change);
+    const counts = CHANGE_BIN_DEFS.map((definition) => {
+      const sample = valid.filter((row) => definition.match(row.change)).length;
+      return { ...definition, sample };
+    });
+    const up = valid.filter((row) => row.change > 0).length;
+    const down = valid.filter((row) => row.change < 0).length;
+    const flat = valid.filter((row) => row.change === 0).length;
+    return {
+      rows,
+      comparable,
+      valid,
+      excluded,
+      counts,
+      up,
+      down,
+      flat,
+      median: median(values),
+      downShare: valid.length ? (down / valid.length) * 100 : null,
+    };
+  }
+
+  function priceBandData(rows = analysisRows()) {
+    const priced = rows.filter((row) => row.price !== null && row.price !== undefined && row.price > 0);
+    const bands = PRICE_BAND_DEFS.map((definition) => {
+      const bandRows = priced.filter((row) => row.price >= definition.min && row.price < definition.max);
+      const comparable = bandRows.filter((row) => row.change !== null && !row.isAnomaly);
+      const values = comparable.map((row) => row.change);
+      return {
+        ...definition,
+        sample: bandRows.length,
+        comparable: comparable.length,
+        up: comparable.filter((row) => row.change > 0).length,
+        down: comparable.filter((row) => row.change < 0).length,
+        flat: comparable.filter((row) => row.change === 0).length,
+        excluded: bandRows.filter((row) => row.isAnomaly).length,
+        median: median(values),
+      };
+    });
+    return {
+      bands,
+      priced,
+      focus: [...bands].sort((a, b) => b.sample - a.sample)[0] || null,
+      weakest: bands.filter((band) => band.comparable >= SAMPLE_LIMIT && band.median !== null).sort((a, b) => a.median - b.median)[0] || null,
+    };
+  }
+
+  function fixedCohortData(scope = state.scope, condition = state.condition === "全部" ? "靓机" : state.condition) {
+    const models = data.models.filter((model) => inScope(model, scope) && model.conditions[condition]?.every((value) => value !== null && value !== undefined));
+    const series = [100];
+    const changes = [0];
+    const samples = [models.length];
+    for (let index = 1; index < data.dates.length; index += 1) {
+      const daily = [];
+      models.forEach((model) => {
+        const history = model.conditions[condition];
+        const change = percentChange(history[index], history[index - 1]);
+        if (change !== null && Math.abs(change) <= data.meta.anomalyLimit) daily.push(change);
+      });
+      const dailyMedian = median(daily) ?? 0;
+      changes.push(Number(dailyMedian.toFixed(2)));
+      samples.push(daily.length);
+      series.push(Number((series.at(-1) * (1 + dailyMedian / 100)).toFixed(2)));
+    }
+    const marketSeries = seriesFor(scope, condition);
+    const selectedIndex = series[state.dateIndex] ?? null;
+    const marketIndex = marketSeries[state.dateIndex] ?? null;
+    return {
+      models,
+      condition,
+      series,
+      changes,
+      samples,
+      sample: models.length,
+      selectedIndex,
+      selectedChange: changes[state.dateIndex] ?? null,
+      selectedSample: samples[state.dateIndex] ?? 0,
+      cumulative: state.dateIndex === 0 || selectedIndex === null ? null : selectedIndex - 100,
+      marketSeries,
+      marketIndex,
+      difference: selectedIndex === null || marketIndex === null ? null : selectedIndex - marketIndex,
+    };
+  }
+
+  function brandBreadthFor(brand, scope = state.scope, index = state.dateIndex) {
+    if (state.condition === "全部") {
+      const stats = brandStatsFor(brand, scope, index);
+      const up = Number(stats?.up || 0);
+      const down = Number(stats?.down || 0);
+      const flat = Number(stats?.flat || 0);
+      const sample = up + down + flat;
+      return { up, down, flat, sample, normal: Number(stats?.normal || 0), change: stats?.change ?? null, anomalies: Number(stats?.anomalies || 0), downShare: sample ? (down / sample) * 100 : null, source: "全内存 SKU" };
+    }
+    let up = 0;
+    let down = 0;
+    let flat = 0;
+    let anomalies = 0;
+    const changes = [];
+    data.models.forEach((model) => {
+      if (model.brand !== brand || !inScope(model, scope)) return;
+      const current = priceAt(model, state.condition, index);
+      const previous = index > 0 ? priceAt(model, state.condition, index - 1) : null;
+      if (current === null || previous === null) return;
+      const change = percentChange(current, previous);
+      if (change === null) return;
+      if (change > 0) up += 1;
+      else if (change < 0) down += 1;
+      else flat += 1;
+      if (Math.abs(change) > data.meta.anomalyLimit) anomalies += 1;
+      else changes.push(change);
+    });
+    const sample = up + down + flat;
+    return { up, down, flat, sample, normal: changes.length, change: median(changes), anomalies, downShare: sample ? (down / sample) * 100 : null, source: "主配置机型" };
+  }
+
+  function briefingData() {
+    const stats = conditionStatsFor(state.scope, state.condition);
+    const rows = analysisRows();
+    const distribution = changeDistributionData(rows);
+    const cohort = fixedCohortData();
+    const scopeStats = statsFor(state.scope);
+    const brandValues = data.brands
+      .map((brand) => ({ brand, value: brandDailyValue(brand) }))
+      .filter((item) => item.value.normal >= SAMPLE_LIMIT && item.value.change !== null)
+      .sort((a, b) => b.value.change - a.value.change);
+    const strongest = brandValues[0] || null;
+    const weakest = brandValues.at(-1) || null;
+    const compared = Number(stats.up || 0) + Number(stats.down || 0) + Number(stats.flat || 0);
+    const downShare = compared ? (Number(stats.down || 0) / compared) * 100 : null;
+    const anomalies = Number(stats.anomalies || 0);
+    const coverage = Number(scopeStats.coverage ?? currentQuality().coverage);
+    const weekly = state.dateIndex === 0 ? null : Number(stats.index) - 100;
+    const daily = state.dateIndex === 0 ? null : stats.change;
+    const focusBand = priceBandData(rows).weakest;
+    const focusRows = distribution.valid.filter((row) => row.change !== null).sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+    const mover = focusRows[0] || null;
+    const headline = daily === null
+      ? `${scopeLabel()}价格基准建立，等待下一交易日`
+      : `${scopeLabel()}日线 ${signedPercent(daily)}，7日累计 ${signedPercent(weekly)}`;
+    const brandText = strongest && weakest
+      ? `最强 ${strongest.brand.name} ${signedPercent(strongest.value.change)}，最弱 ${weakest.brand.name} ${signedPercent(weakest.value.change)}`
+      : "当前品牌可比样本不足，暂不输出强弱结论";
+    const summary = `${conditionLabel()}指数 ${fixed(stats.index, 2)}；全内存口径上涨 ${num(stats.up)} / 下跌 ${num(stats.down)} / 持平 ${num(stats.flat)} 个可比 SKU，下跌面 ${downShare === null ? "—" : `${fixed(downShare, 1)}%`}。${brandText}。`;
+    const moveText = mover
+      ? `${mover.model}（${mover.mainMemory}·${mover.condition}）${signedPercent(mover.change)}`
+      : "当前暂无有效单款涨跌";
+    const actions = [
+      {
+        level: "P0",
+        title: anomalies ? `先核 ${num(anomalies)} 条异常跳价` : "先守住报价可信度",
+        detail: anomalies
+          ? `当前有价率 ${fixed(coverage, 1)}%；外发报价前先排除录价、映射或补价错误。`
+          : `当前有价率 ${fixed(coverage, 1)}%；异常价为 0，继续复核零价和缺失记录。`,
+      },
+      {
+        level: "P1",
+        title: weakest ? `跟进 ${weakest.brand.name} 的相对弱势` : "品牌样本仍待补齐",
+        detail: weakest
+          ? `日变动 ${signedPercent(weakest.value.change)}，可比样本 ${num(weakest.value.normal)} 条；确认是否由单款或单一配置拉动。`
+          : "当前没有达到 5 条可比样本的品牌，暂不形成品牌动作。",
+      },
+      {
+        level: "P2",
+        title: focusBand && focusBand.median < 0 ? `${focusBand.label} 价格带承压` : "观察价格带分化",
+        detail: focusBand
+          ? `${focusBand.label} 价格带中位 ${signedPercent(focusBand.median)}，有效样本 ${num(focusBand.comparable)} 条；固定队列累计 ${signedPercent(cohort.cumulative)}。`
+          : `固定队列累计 ${signedPercent(cohort.cumulative)}，等待更多价格带样本。`,
+      },
+    ];
+    const copyText = [
+      `【价脉行情简报】${longDate(currentDate().date)}｜${scopeLabel()} · ${conditionLabel()}`,
+      `方向：${headline}`,
+      `指数：${fixed(stats.index, 2)}；日变动 ${signedPercent(daily)}；7日累计 ${signedPercent(weekly)}`,
+      `广度：全内存 SKU 上涨 ${num(stats.up)} / 下跌 ${num(stats.down)} / 持平 ${num(stats.flat)}；下跌面 ${downShare === null ? "—" : `${fixed(downShare, 1)}%`}`,
+      `品牌：${brandText}`,
+      `异动：${moveText}`,
+      `质量：异常跳价 ${num(anomalies)} 条已隔离；报价有价率 ${fixed(coverage, 1)}%`,
+      `动作：${actions.map((action) => `${action.level} ${action.title}`).join("；")}`,
+      `口径：指数、广度、品牌为全内存 SKU；分布、价格带为主配置 × ${analysisConditionNote()}；固定队列为主配置 × ${cohort.condition}；异常跳价 ±30% 不进入趋势；报价为参考价，非成交价。`,
+    ].join("\n");
+    return {
+      stats,
+      distribution,
+      cohort,
+      strongest,
+      weakest,
+      compared,
+      downShare,
+      anomalies,
+      coverage,
+      weekly,
+      daily,
+      headline,
+      summary,
+      actions,
+      copyText,
+    };
   }
 
   function top100Movement() {
@@ -479,6 +723,126 @@
     const action = $(".top100-action");
     action.innerHTML = state.scope === "top100" ? "当前已聚焦 100 款 <span>↓</span>" : "查看全部 100 款 <span>↗</span>";
     $(".top100-band").classList.toggle("is-current", state.scope === "top100");
+  }
+
+  function renderBriefing() {
+    const brief = briefingData();
+    $("#briefScope").textContent = `${scopeLabel()} · ${conditionLabel()} · ${currentDate().short}`;
+    $("#briefTitle").textContent = brief.headline;
+    $("#briefSummary").textContent = brief.summary;
+    const downShare = brief.downShare === null ? "—" : `${fixed(brief.downShare, 1)}%`;
+    $("#briefFacts").innerHTML = `
+      <div class="brief-fact"><span>7日累计</span><strong class="${directionClass(brief.weekly)}">${signedPercent(brief.weekly)}</strong><small>截至 ${currentDate().short}</small></div>
+      <div class="brief-fact"><span>下跌面</span><strong>${downShare}</strong><small>${num(brief.stats.down)} / ${num(brief.compared)} 个全内存 SKU</small></div>
+      <div class="brief-fact"><span>固定队列</span><strong>${fixed(brief.cohort.selectedIndex, 2)}</strong><small>${num(brief.cohort.sample)} 款${brief.cohort.condition} · 较指数 ${signedIndexPoint(brief.cohort.difference)}</small></div>`;
+    $("#briefActions").innerHTML = brief.actions.map((action) => `<li class="brief-action"><span class="brief-level">${action.level}</span><div><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.detail)}</p></div></li>`).join("");
+    $("#briefFootnote").textContent = `口径：指数、广度、品牌为全内存 SKU；分布/价格带为主配置 × ${analysisConditionNote()}；队列为主配置 × ${brief.cohort.condition}；异常 ±${data.meta.anomalyLimit}% 已隔离。`;
+  }
+
+  function renderDistribution() {
+    const distribution = changeDistributionData();
+    const values = distribution.valid.map((row) => row.change);
+    const maxCount = Math.max(1, ...distribution.counts.map((item) => item.sample));
+    let title = "当日暂无可比涨跌，等待下一交易日";
+    if (distribution.median !== null) {
+      if (distribution.median > 0.2) title = `涨跌分布偏向上行，中位 ${signedPercent(distribution.median)}`;
+      else if (distribution.median < -0.2) title = `下跌样本占 ${fixed(distribution.downShare, 1)}%，中位 ${signedPercent(distribution.median)}`;
+      else title = `涨跌以窄幅波动为主，中位 ${signedPercent(distribution.median)}`;
+    }
+    $("#distributionTitle").textContent = title;
+    $("#structureScope").textContent = `主配置 · ${analysisConditionNote()}`;
+    $("#distributionMeta").textContent = `${num(distribution.valid.length)} 有效 · ${num(distribution.excluded.length)} 隔离`;
+    $("#changeDistribution").innerHTML = distribution.counts.map((item) => {
+      const width = (item.sample / maxCount) * 100;
+      const share = values.length ? (item.sample / values.length) * 100 : 0;
+      return `<div class="dist-row dist-${item.direction}" role="listitem" title="${escapeHtml(item.label)}：${num(item.sample)} 条，占 ${fixed(share, 1)}%"><span class="dist-label">${escapeHtml(item.label)}</span><span class="dist-track" aria-hidden="true"><i style="width:${width}%"></i></span><strong>${num(item.sample)}</strong></div>`;
+    }).join("");
+    const multiConditionNote = state.condition === "全部" ? "；同一机型可有多成色记录" : "";
+    $("#structureFoot").textContent = `主配置 × ${analysisConditionNote()}${multiConditionNote}；日涨跌有效样本 ${num(distribution.valid.length)} 条，异常 ${num(distribution.excluded.length)} 条已隔离。`;
+  }
+
+  function renderPriceBands() {
+    const bandData = priceBandData();
+    const focus = bandData.focus;
+    const weakest = bandData.weakest;
+    $("#priceBandTitle").textContent = focus
+      ? weakest && weakest.median < 0
+        ? `${focus.label}样本最集中，${weakest.label} 中位承压`
+        : `${focus.label}样本最集中，价格带尚未明显分化`
+      : "当前没有可分析的有价样本";
+    $("#priceBandMeta").textContent = `${num(bandData.priced.length)} 个有价观察`;
+    $("#priceBands").innerHTML = bandData.bands.map((band) => {
+      const total = band.comparable;
+      const upWidth = total ? (band.up / total) * 100 : 0;
+      const flatWidth = total ? (band.flat / total) * 100 : 0;
+      const downWidth = total ? (band.down / total) * 100 : 0;
+      return `<div class="price-band-item" role="listitem" aria-label="${escapeHtml(band.label)}，${num(band.sample)} 个有价样本，上涨 ${band.up}，下跌 ${band.down}，中位 ${signedPercent(band.median)}">
+        <div class="price-band-head"><strong>${escapeHtml(band.label)}</strong><span>${num(band.sample)} 个</span></div>
+        <div class="price-band-segments" aria-hidden="true"><i class="is-up" style="width:${upWidth}%"></i><i class="is-flat" style="width:${flatWidth}%"></i><i class="is-down" style="width:${downWidth}%"></i></div>
+        <div class="price-band-foot"><span>${band.comparable ? `<b class="up-text">↑${band.up}</b> <b class="down-text">↓${band.down}</b> <b>—${band.flat}</b>` : "暂无可比样本"}</span><strong class="${directionClass(band.median)}">${band.comparable ? signedPercent(band.median) : "—"}</strong></div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderCohortChart(cohort) {
+    const container = $("#cohortChart");
+    if (!container) return;
+    if (!cohort.sample) {
+      container.innerHTML = `<div class="cohort-empty"><strong>没有 7 日连续有价队列</strong><span>当前范围与成色下暂无法形成固定样本。</span></div>`;
+      return;
+    }
+    const width = Math.max(280, container.clientWidth || 360);
+    const height = 168;
+    const margin = { top: 14, right: 10, bottom: 24, left: 34 };
+    const plotWidth = width - margin.left - margin.right;
+    const plotHeight = height - margin.top - margin.bottom;
+    const values = [...cohort.series, ...cohort.marketSeries];
+    let min = Math.min(...values);
+    let max = Math.max(...values);
+    if (max - min < 0.35) {
+      const center = (max + min) / 2;
+      min = center - 0.2;
+      max = center + 0.2;
+    } else {
+      min -= (max - min) * 0.12;
+      max += (max - min) * 0.12;
+    }
+    const x = (index) => margin.left + (index / Math.max(1, data.dates.length - 1)) * plotWidth;
+    const y = (value) => margin.top + ((max - value) / (max - min)) * plotHeight;
+    let grid = "";
+    for (let index = 0; index <= 3; index += 1) {
+      const yPosition = margin.top + (index / 3) * plotHeight;
+      const value = max - (index / 3) * (max - min);
+      grid += `<line class="cohort-grid-line" x1="${margin.left}" x2="${width - margin.right}" y1="${yPosition}" y2="${yPosition}"/><text class="cohort-axis-text" x="${margin.left - 8}" y="${yPosition + 3}" text-anchor="end">${value.toFixed(1)}</text>`;
+    }
+    const cohortPath = cohort.series.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
+    const marketPath = cohort.marketSeries.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
+    const areaPath = `${cohortPath} L${x(cohort.series.length - 1).toFixed(1)},${(margin.top + plotHeight).toFixed(1)} L${x(0).toFixed(1)},${(margin.top + plotHeight).toFixed(1)} Z`;
+    const labels = data.dates.map((date, index) => `<text class="cohort-x-label ${index === state.dateIndex ? "is-selected" : ""}" x="${x(index)}" y="${height - 6}" text-anchor="${index === 0 ? "start" : index === data.dates.length - 1 ? "end" : "middle"}">${formatAxisDate(date.date)}</text>`).join("");
+    const dots = cohort.series.map((value, index) => `<circle class="cohort-dot ${index === state.dateIndex ? "is-selected" : ""}" cx="${x(index).toFixed(1)}" cy="${y(value).toFixed(1)}" r="${index === state.dateIndex ? 3.6 : 2.3}"><title>${longDate(data.dates[index].date)}：${fixed(value, 2)}</title></circle>`).join("");
+    const selectedX = x(state.dateIndex);
+    const gradientId = `cohort-area-${sparkCounter += 1}`;
+    container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" aria-hidden="true" focusable="false"><defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c8ef6a" stop-opacity=".22"/><stop offset="100%" stop-color="#c8ef6a" stop-opacity="0"/></linearGradient></defs>${grid}${labels}<path d="${areaPath}" fill="url(#${gradientId})"/><path d="${marketPath}" class="cohort-market-line"/><path d="${cohortPath}" class="cohort-main-line"/>${dots}<line class="cohort-selected-line" x1="${selectedX}" x2="${selectedX}" y1="${margin.top}" y2="${margin.top + plotHeight}"/></svg>`;
+    container.setAttribute("aria-label", `固定队列${cohort.condition} ${num(cohort.sample)} 款，${currentDate().short}指数 ${fixed(cohort.selectedIndex, 2)}，同成色市场指数 ${fixed(cohort.marketIndex, 2)}`);
+  }
+
+  function renderCohort() {
+    const cohort = fixedCohortData();
+    $("#cohortBadge").textContent = `${cohort.condition}队列`;
+    $("#cohortIndex").textContent = fixed(cohort.selectedIndex, 2);
+    const change = $("#cohortChange");
+    change.textContent = state.dateIndex === 0 ? "基准日" : `${signedPercent(cohort.selectedChange)} 当日`;
+    change.className = directionClass(cohort.selectedChange);
+    $("#cohortSample").textContent = `${num(cohort.sample)} 款`;
+    $("#cohortSample").title = `当日可比较 ${num(cohort.selectedSample)} 条`;
+    const diff = $("#cohortDiff");
+    diff.textContent = signedIndexPoint(cohort.difference);
+    diff.className = directionClass(cohort.difference);
+    $("#cohortFoot").textContent = state.condition === "全部"
+      ? `当前为全成色筛选，队列默认取靓机口径；${num(cohort.sample)} 款机型 7 日连续有价，队列不随日期洗牌。`
+      : `${num(cohort.sample)} 款机型 7 日连续有价；队列不随日期洗牌，按每日中位涨跌复利计算。`;
+    $("#cohortLegend").innerHTML = `<span><i class="cohort-key cohort-key-main"></i>固定队列 <b>${fixed(cohort.selectedIndex, 2)}</b></span><span><i class="cohort-key cohort-key-market"></i>${cohort.condition}市场指数 <b>${fixed(cohort.marketIndex, 2)}</b></span>`;
+    renderCohortChart(cohort);
   }
 
   function opsStorageKey() {
@@ -786,32 +1150,42 @@
       }).join("")}`;
     }).join("");
     $("#brandHeatmap").innerHTML = `<div class="heat-corner">品牌 / 成色</div>${headers}${rows}`;
-    $("#heatScopeLabel").textContent = `${scopeLabel()} · ${currentDate().short} · 日涨跌幅`;
+    $("#heatScopeLabel").textContent = `全内存 SKU · ${scopeLabel()} · ${currentDate().short} · 日涨跌`;
   }
 
   function renderBrandRanking() {
-    const ranked = data.brands.map((brand) => ({ brand, value: brandDailyValue(brand) })).sort((a, b) => {
-      const aValid = a.value.normal >= SAMPLE_LIMIT;
-      const bValid = b.value.normal >= SAMPLE_LIMIT;
+    const ranked = data.brands.map((brand) => {
+      const value = brandDailyValue(brand);
+      const breadth = brandBreadthFor(brand.name, state.scope);
+      return {
+        brand,
+        value,
+        breadth,
+        displayChange: state.condition === "全部" ? value.change : breadth.change,
+        comparable: state.condition === "全部" ? value.normal : breadth.normal,
+      };
+    }).sort((a, b) => {
+      const aValid = a.comparable >= SAMPLE_LIMIT;
+      const bValid = b.comparable >= SAMPLE_LIMIT;
       if (aValid !== bValid) return aValid ? -1 : 1;
-      return b.value.change - a.value.change;
+      return b.displayChange - a.displayChange;
     });
-    const maxChange = Math.max(...ranked.filter((item) => item.value.normal >= SAMPLE_LIMIT).map((item) => Math.abs(item.value.change)), 0.1);
-    $("#brandRankingTitle").textContent = `${scopeLabel()}品牌日涨跌${state.condition === "全部" ? "" : ` · ${state.condition}`}`;
-    $("#rankingSortLabel").innerHTML = `${currentDate().short} <span>↓</span>`;
+    $("#brandRankingTitle").textContent = `${scopeLabel()}品牌涨跌广度${state.condition === "全部" ? "" : ` · ${state.condition}`}`;
+    $("#rankingSortLabel").innerHTML = `${currentDate().short} · 日涨跌 <span>↓</span>`;
     $("#brandRanking").innerHTML = ranked.map((item, index) => {
-      const { brand, value } = item;
-      const insufficient = value.normal < SAMPLE_LIMIT;
-      const width = insufficient ? 0 : Math.max(3, Math.min(50, (Math.abs(value.change) / maxChange) * 50));
+      const { brand, value, breadth, displayChange, comparable } = item;
+      const insufficient = comparable < SAMPLE_LIMIT;
       const stats = value.stats || brandStatsFor(brand);
-      const total = Math.max(1, Number(stats.up || 0) + Number(stats.down || 0) + Number(stats.flat || 0));
-      const upShare = (Number(stats.up || 0) / total) * 100;
-      const downShare = (Number(stats.down || 0) / total) * 100;
-      return `<div class="brand-row ${state.brand === brand.name ? "is-active" : ""} ${insufficient ? "is-insufficient" : ""}" data-brand-filter="${escapeHtml(brand.name)}" tabindex="0" role="button" aria-label="筛选 ${escapeHtml(brand.name)} 品牌"><span class="brand-rank">${String(index + 1).padStart(2, "0")}</span><span class="brand-monogram">${brand.short}</span><span class="brand-row-name"><strong>${escapeHtml(brand.name)}</strong><small>${num(brandModelCount(brand))} 款${state.scope === "all" ? "机型" : "重点机型"}</small></span><span class="brand-row-index">${insufficient ? "—" : state.condition === "全部" ? fixed(stats.index, 2) : "—"}</span><span class="brand-row-change ${insufficient ? "" : directionClass(value.change)}">${insufficient ? "样本不足" : signedPercent(value.change)}</span><div class="brand-meter"><div class="brand-bar-track"><span class="${value.change >= 0 ? "is-positive" : "is-negative"}" style="width:${width}%"></span></div>${state.condition === "全部" && !insufficient ? `<div class="brand-share"><i class="share-up" style="width:${upShare}%"></i><i class="share-down" style="width:${downShare}%"></i></div>` : ""}</div></div>`;
+      const total = Math.max(1, breadth.sample);
+      const upWidth = (breadth.up / total) * 100;
+      const flatWidth = (breadth.flat / total) * 100;
+      const downWidth = (breadth.down / total) * 100;
+      const detail = insufficient ? "可比样本不足" : `上涨 ${breadth.up}，下跌 ${breadth.down}，持平 ${breadth.flat}，下跌占比 ${fixed(breadth.downShare, 1)}%`;
+      return `<div class="brand-row ${state.brand === brand.name ? "is-active" : ""} ${insufficient ? "is-insufficient" : ""}" data-brand-filter="${escapeHtml(brand.name)}" tabindex="0" role="button" aria-label="${escapeHtml(brand.name)}，日变动 ${insufficient ? "样本不足" : signedPercent(displayChange)}；${detail}。筛选品牌" title="${escapeHtml(brand.name)} · ${detail}"><span class="brand-rank">${String(index + 1).padStart(2, "0")}</span><span class="brand-monogram">${brand.short}</span><span class="brand-row-name"><strong>${escapeHtml(brand.name)}</strong><small>${num(brandModelCount(brand.name))} 款 · ${num(breadth.sample)} 条变动</small></span><span class="brand-row-index">${insufficient ? "—" : state.condition === "全部" ? fixed(stats.index, 2) : "—"}</span><span class="brand-row-change ${insufficient ? "" : directionClass(displayChange)}">${insufficient ? "样本不足" : signedPercent(displayChange)}</span><div class="brand-meter" aria-hidden="true"><div class="brand-breadth-bar"><i class="is-up" style="width:${upWidth}%"></i><i class="is-flat" style="width:${flatWidth}%"></i><i class="is-down" style="width:${downWidth}%"></i></div><div class="brand-breadth-meta"><span class="up-text">↑${num(breadth.up)}</span><span class="down-text">↓${num(breadth.down)}</span><span class="brand-flat-count">—${num(breadth.flat)}</span><b>跌 ${breadth.downShare === null ? "—" : `${fixed(breadth.downShare, 0)}%`}</b></div></div></div>`;
     }).join("");
     $(".ranking-panel .ranking-foot").innerHTML = state.condition === "全部"
-      ? `<span><i class="legend-square up-bg"></i>上涨 SKU</span><span><i class="legend-square down-bg"></i>下跌 SKU</span><span>可比样本少于 ${SAMPLE_LIMIT} 条标记不足</span>`
-      : `<span><i class="legend-square up-bg"></i>${state.condition}日涨跌幅</span><span>同品牌 · 同成色可比样本</span><span>少于 ${SAMPLE_LIMIT} 条不排序</span>`;
+      ? `<span><i class="legend-square up-bg"></i>上涨 SKU</span><span><i class="legend-square down-bg"></i>下跌 SKU</span><span>全内存 SKU 口径 · 少于 ${SAMPLE_LIMIT} 条不排序</span>`
+      : `<span><i class="legend-square up-bg"></i>主配置上涨</span><span><i class="legend-square down-bg"></i>主配置下跌</span><span>${state.condition}机型口径 · 异常价隔离</span>`;
   }
 
   function renderTable() {
@@ -887,11 +1261,15 @@
     renderTape();
     renderKpis();
     renderTop100Band();
+    renderBriefing();
     renderOps();
     renderMarketChart();
     renderLegend();
     renderSignals();
     renderHeatmap();
+    renderDistribution();
+    renderPriceBands();
+    renderCohort();
     renderBrandRanking();
     renderTable();
     renderQuality();
@@ -1092,16 +1470,12 @@
     return { model, memory, condition, price, stats };
   }
 
-  async function copyQuoteSummary() {
-    const selection = drawerSelection();
-    if (!selection) return;
-    const { model, memory, condition, price, stats } = selection;
-    const summary = `${model.model} ${memory} ${condition}｜参考价 ${price ? `¥${num(price)}` : "暂无"}｜7日中位 ${stats.median === null ? "暂无" : `¥${num(Math.round(stats.median))}`}｜P25–P75 ${stats.low === null ? "暂无" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`}｜数据截至 ${currentDate().date}｜行情参考，非成交价`;
+  async function copyText(text, successMessage) {
     try {
-      await navigator.clipboard.writeText(summary);
+      await navigator.clipboard.writeText(text);
     } catch {
       const area = document.createElement("textarea");
-      area.value = summary;
+      area.value = text;
       area.style.position = "fixed";
       area.style.opacity = "0";
       document.body.appendChild(area);
@@ -1109,7 +1483,20 @@
       document.execCommand("copy");
       area.remove();
     }
-    showToast("报价摘要已复制");
+    showToast(successMessage);
+  }
+
+  async function copyBriefing() {
+    const brief = briefingData();
+    await copyText(brief.copyText, "7日行情简报已复制");
+  }
+
+  async function copyQuoteSummary() {
+    const selection = drawerSelection();
+    if (!selection) return;
+    const { model, memory, condition, price, stats } = selection;
+    const summary = `${model.model} ${memory} ${condition}｜参考价 ${price ? `¥${num(price)}` : "暂无"}｜7日中位 ${stats.median === null ? "暂无" : `¥${num(Math.round(stats.median))}`}｜P25–P75 ${stats.low === null ? "暂无" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`}｜数据截至 ${currentDate().date}｜行情参考，非成交价`;
+    await copyText(summary, "报价摘要已复制");
   }
 
   function exportSelectedSku() {
@@ -1357,6 +1744,7 @@
     $("[data-quote-copy]").addEventListener("click", copyQuoteSummary);
     $("[data-quote-watch]").addEventListener("click", toggleSkuWatch);
     $("[data-quote-export]").addEventListener("click", exportSelectedSku);
+    $("[data-brief-copy]").addEventListener("click", copyBriefing);
     $("[data-ops-reset]").addEventListener("click", () => {
       try {
         localStorage.removeItem(opsStorageKey());
@@ -1402,6 +1790,7 @@
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(() => {
         renderMarketChart();
+        renderCohortChart(fixedCohortData());
         if (state.drawerModelId && $("#detailDrawer").classList.contains("is-open")) renderDrawer();
       });
     });
@@ -1413,6 +1802,7 @@
     renderAll();
     bindEvents();
     requestAnimationFrame(renderMarketChart);
+    requestAnimationFrame(() => renderCohortChart(fixedCohortData()));
   }
 
   init();
