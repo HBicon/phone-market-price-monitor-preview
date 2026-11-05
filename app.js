@@ -34,6 +34,91 @@
     { label: "¥3,000–4,999", short: "3K–5K", min: 3000, max: 5000 },
     { label: "¥5,000 以上", short: "≥5K", min: 5000, max: Infinity },
   ];
+  const CONDITION_SPREAD_BASE = "靓机";
+  const CONDITION_SPREAD_TARGETS = ["小花", "大花", "外爆", "内爆"];
+  const METRIC_DEFINITIONS = [
+    {
+      name: "市场指数",
+      code: "PRICE INDEX",
+      definition: "同一批可比 SKU 的日价格变动中位数，复利形成 100 基期指数。",
+      formula: "I_t = I_{t-1} × (1 + median(ΔP_i / P_{i-1}))；I₀ = 100；排除 |Δ| > 30%",
+      source: "日报报价单 → 日快照 → 全内存 SKU",
+      frequency: "日更 · 1 次/交易日",
+      role: "数据运营",
+    },
+    {
+      name: "涨跌广度",
+      code: "BREADTH",
+      definition: "当日可比 SKU 中上涨、下跌、持平的数量与下跌面。",
+      formula: "↑n / ↓n / =n；下跌面 = ↓n ÷ (↑n + ↓n + =n)",
+      source: "日快照 → 相邻两日同 SKU 配对",
+      frequency: "日更 · 与指数同步",
+      role: "行情运营",
+    },
+    {
+      name: "异常率",
+      code: "OUTLIERS",
+      definition: "单日涨跌超过阈值的 SKU 占比；异常值不进入趋势与排行。",
+      formula: "|P_t / P_{t-1} − 1| > 30% 的 SKU 数 ÷ 可比 SKU 数",
+      source: "日快照 → 同 SKU 相邻日变动",
+      frequency: "日更 · 与指数同步",
+      role: "数据运营",
+    },
+    {
+      name: "有价率",
+      code: "COVERAGE",
+      definition: "当日唯一键中，存在正价报价的比例。",
+      formula: "有价唯一键 ÷ 原始唯一键；唯一键 = 日期 + 机型ID + 内存 + 成色",
+      source: "日报报价单 → 去重后的日快照",
+      frequency: "日更 · 入库后即时",
+      role: "数据运营",
+    },
+    {
+      name: "TOP100 指数",
+      code: "TOP100",
+      definition: "固定 100 款重点机型的独立指数，避免全量长尾掩盖重点变化。",
+      formula: "近 7 日靓机连续有价，按最新靓机价降序取前 100；指数算法同市场指数",
+      source: "日快照 → 固定重点池 → 靓机主配置",
+      frequency: "日更 · 池成员 7 日固定",
+      role: "行情运营",
+    },
+    {
+      name: "固定队列指数",
+      code: "FIXED COHORT",
+      definition: "同一批 7 日连续有价机型形成的可比趋势，不使用每日新样本洗牌。",
+      formula: "C_t = C_{t-1} × (1 + median(队列内日涨跌))；C₀ = 100",
+      source: "日快照 → 主配置 → 当前成色完整 7 日队列",
+      frequency: "日更 · 队列固定",
+      role: "数据运营",
+    },
+    {
+      name: "成色价差 / 折扣",
+      code: "CONDITION SPREAD",
+      definition: "同日、同机型、同主内存下，目标成色相对靓机的价差、折扣与倒挂。",
+      formula: "价差 = P目标 − P靓机；折扣 = P目标 / P靓机 − 1；中位数仅取异价样本",
+      source: "日快照 → 主配置 model.mainMemory（不含演示内存阶梯）",
+      frequency: "日更 · 当日快照",
+      role: "行情运营 / 数据运营",
+    },
+    {
+      name: "近 7 日中位价与区间",
+      code: "BUYER REFERENCE",
+      definition: "同一 SKU 近 7 日有价样本的中位价、P25–P75 与价格位置。",
+      formula: "median(P₁…P₇)；P25 / P75 为同序列四分位；缺价日不补 0",
+      source: "日快照 → 主配置 + 明确标识的演示内存阶梯",
+      frequency: "日更 · 随日期窗口滚动",
+      role: "行情运营 / 买家参考",
+    },
+    {
+      name: "目标池进度",
+      code: "TARGET POOL",
+      definition: "在榜机型相对 1,000 款目标池的覆盖进度与缺口。",
+      formula: "在榜机型数 ÷ 1,000；缺口 = 1,000 − 在榜机型数",
+      source: "日报报价单 → 机型主数据去重",
+      frequency: "日更 · 随在榜变化",
+      role: "产品定义",
+    },
+  ];
   const SAMPLE_LIMIT = 5;
   const TARGET_MODELS = Number(data.meta.targetModels || 1000);
   const WATCHLIST_KEY = "price-pulse.watchlist.v1";
@@ -435,6 +520,63 @@
     };
   }
 
+  function conditionSpreadData(scope = state.scope, index = state.dateIndex) {
+    const models = data.models.filter((model) => inScope(model, scope));
+    const pairs = CONDITION_SPREAD_TARGETS.map((condition) => {
+      let sample = 0;
+      let different = 0;
+      let samePrice = 0;
+      let inversion = 0;
+      const differences = [];
+      const discounts = [];
+      models.forEach((model) => {
+        const basePrice = priceAt(model, CONDITION_SPREAD_BASE, index);
+        const targetPrice = priceAt(model, condition, index);
+        if (basePrice === null || targetPrice === null) return;
+        sample += 1;
+        if (targetPrice === basePrice) {
+          samePrice += 1;
+          return;
+        }
+        different += 1;
+        if (targetPrice > basePrice) inversion += 1;
+        differences.push(targetPrice - basePrice);
+        discounts.push((targetPrice / basePrice - 1) * 100);
+      });
+      return {
+        condition,
+        sample,
+        different,
+        samePrice,
+        inversion,
+        medianDifference: median(differences),
+        medianDiscount: median(discounts),
+      };
+    });
+    const deepest = pairs
+      .filter((pair) => pair.medianDiscount !== null)
+      .sort((a, b) => a.medianDiscount - b.medianDiscount)[0] || null;
+    const maxInversion = [...pairs].sort((a, b) => b.inversion - a.inversion)[0] || null;
+    const maxAbsDiscount = Math.max(0, ...pairs.filter((pair) => pair.medianDiscount !== null).map((pair) => Math.abs(pair.medianDiscount)));
+    const noConditionDifferentiation = models.filter((model) => {
+      const baseHistory = model.conditions[CONDITION_SPREAD_BASE];
+      return baseHistory && THREE_TIER_CONDITIONS.every((condition) => {
+        const history = model.conditions[condition];
+        return history && history.length === baseHistory.length && baseHistory.every((value, dayIndex) => value === history[dayIndex]);
+      });
+    }).length;
+    return {
+      models,
+      pairs,
+      modelCount: models.length,
+      deepest,
+      maxInversion,
+      maxAbsDiscount,
+      noConditionDifferentiation,
+      noDifferentiationShare: models.length ? (noConditionDifferentiation / models.length) * 100 : 0,
+    };
+  }
+
   function fixedCohortData(scope = state.scope, condition = state.condition === "全部" ? "靓机" : state.condition) {
     const models = data.models.filter((model) => inScope(model, scope) && model.conditions[condition]?.every((value) => value !== null && value !== undefined));
     const series = [100];
@@ -653,6 +795,22 @@
       : "当前为 7 日真实报价口径；指数仅反映报价变化，不等同成交量或利润。";
   }
 
+  function renderMethodology() {
+    const freshness = `T+0 · ${currentDate().short} ${data.meta.updatedAt}`;
+    $("#methodAsOf").textContent = `${longDate(currentDate().date)} · ${data.meta.updatedAt}`;
+    $("#methodFreshness").textContent = freshness;
+    $("#metricDictionaryBody").innerHTML = METRIC_DEFINITIONS.map((metric) => `
+      <tr>
+        <th scope="row"><strong>${escapeHtml(metric.name)}</strong><span>${escapeHtml(metric.code)}</span></th>
+        <td>${escapeHtml(metric.definition)}</td>
+        <td><code>${escapeHtml(metric.formula)}</code></td>
+        <td>${escapeHtml(metric.source)}</td>
+        <td>${escapeHtml(metric.frequency)}</td>
+        <td>${escapeHtml(metric.role)}</td>
+        <td><span class="metric-freshness"><i aria-hidden="true"></i>${escapeHtml(freshness)}</span></td>
+      </tr>`).join("");
+  }
+
   function renderTape() {
     const stats = statsFor(state.scope);
     const items = [`<strong>${scopeLabel()} INDEX</strong><span>${fixed(stats.index, 2)}</span><span class="${directionClass(stats.change)}">${signedPercent(stats.change)}</span>`];
@@ -782,6 +940,42 @@
         <div class="price-band-foot"><span>${band.comparable ? `<b class="up-text">↑${band.up}</b> <b class="down-text">↓${band.down}</b> <b>—${band.flat}</b>` : "暂无可比样本"}</span><strong class="${directionClass(band.median)}">${band.comparable ? signedPercent(band.median) : "—"}</strong></div>
       </div>`;
     }).join("");
+  }
+
+  function renderConditionSpread() {
+    const spread = conditionSpreadData();
+    const deepest = spread.deepest;
+    const maxInversion = spread.maxInversion;
+    $("#spreadScope").textContent = `${scopeLabel()} · 主配置 · ${currentDate().short}`;
+    $("#spreadSubtitle").textContent = `${currentDate().label} · 以靓机为基准，只在同机型、同主内存内比较四组成色价差。`;
+    $("#spreadDeepestValue").textContent = deepest?.medianDiscount === null || deepest?.medianDiscount === undefined ? "—" : signedPercent(deepest.medianDiscount);
+    $("#spreadDeepestLabel").textContent = deepest ? `${deepest.condition} · ${num(deepest.different)} 条异价` : "暂无可比样本";
+    $("#spreadInversionValue").textContent = maxInversion ? `${num(maxInversion.inversion)} 条` : "—";
+    $("#spreadInversionLabel").textContent = maxInversion ? `${maxInversion.condition} · 高于靓机` : "暂无倒挂样本";
+    $("#spreadSameValue").textContent = `${num(spread.noConditionDifferentiation)} 款`;
+    $("#spreadSameLabel").textContent = `三档无分化 · 占 ${fixed(spread.noDifferentiationShare, 1)}%`;
+    $("#spreadSummary").textContent = deepest
+      ? `${deepest.condition}的中位折价 ${signedPercent(deepest.medianDiscount)}，为四组最深；但同价样本仍需先复核成色映射，不能直接当作市场折价。`
+      : "当前没有可比较的成色价差样本，等待下一交易日。";
+    $("#spreadWarning").classList.toggle("is-clear", spread.noConditionDifferentiation === 0 && (!maxInversion || maxInversion.inversion === 0));
+    $("#spreadWarningText").textContent = spread.noConditionDifferentiation
+      ? `${num(spread.noConditionDifferentiation)} 款（占 ${fixed(spread.noDifferentiationShare, 1)}%）的靓机、小花、大花在 7 日窗口内无价格分化；同价记录不参与中位价差和折扣。${maxInversion?.inversion ? `另有 ${num(maxInversion.inversion)} 条「${maxInversion.condition}高于靓机」倒挂，单列但不视作同价。` : ""}`
+      : "三档成色未发现整体同价；继续关注异价样本与倒挂记录。";
+    const maxAbs = Math.max(spread.maxAbsDiscount, 1);
+    $("#conditionSpreadList").innerHTML = spread.pairs.map((pair) => {
+      const width = pair.medianDiscount === null ? 0 : Math.min(100, (Math.abs(pair.medianDiscount) / maxAbs) * 100);
+      const selected = state.condition === pair.condition;
+      const discountText = pair.medianDiscount === null ? "—" : signedPercent(pair.medianDiscount);
+      const differenceText = pair.medianDifference === null ? "—" : signedMoney(pair.medianDifference);
+      return `<div class="spread-item" role="listitem">
+        <button class="spread-row ${selected ? "is-active" : ""}" type="button" data-spread-condition="${escapeHtml(pair.condition)}" aria-pressed="${selected}" aria-label="${escapeHtml(pair.condition)}较靓机：有效 ${pair.sample} 条，异价 ${pair.different} 条，同价 ${pair.samePrice} 条，倒挂 ${pair.inversion} 条，中位折价 ${discountText}，中位价差 ${differenceText}。点击筛选${escapeHtml(pair.condition)}。" style="--spread-color:${conditionColor(pair.condition)};--spread-width:${width}%">
+          <span class="spread-name"><i aria-hidden="true"></i><span><strong>${escapeHtml(pair.condition)}</strong><small>较靓机</small></span></span>
+          <span class="spread-visual"><span class="spread-track" aria-hidden="true"><i></i></span><span class="spread-value"><strong>${discountText}</strong><small>中位折价 · ${differenceText}</small></span></span>
+          <span class="spread-facts"><span><b>${num(pair.different)}</b>异价</span><span><b>${num(pair.samePrice)}</b>同价</span><span class="${pair.inversion ? "has-inversion" : ""}"><b>${num(pair.inversion)}</b>倒挂</span><span><b>${num(pair.sample)}</b>有效</span></span>
+        </button>
+      </div>`;
+    }).join("");
+    $("#spreadFoot").textContent = `主配置 × ${scopeLabel()} · 同机型同内存；同价样本不参与中位价差；倒挂=目标成色高于靓机，不等于同价；未计入演示内存阶梯。`;
   }
 
   function renderCohortChart(cohort) {
@@ -1258,6 +1452,7 @@
 
   function renderAll() {
     renderDateChrome();
+    renderMethodology();
     renderTape();
     renderKpis();
     renderTop100Band();
@@ -1269,6 +1464,7 @@
     renderHeatmap();
     renderDistribution();
     renderPriceBands();
+    renderConditionSpread();
     renderCohort();
     renderBrandRanking();
     renderTable();
@@ -1637,6 +1833,11 @@
       const conditionButton = event.target.closest(".condition-pill");
       if (conditionButton) {
         setCondition(conditionButton.dataset.condition, true);
+        return;
+      }
+      const spreadCondition = event.target.closest("[data-spread-condition]");
+      if (spreadCondition) {
+        setCondition(spreadCondition.dataset.spreadCondition, true);
         return;
       }
       const legendButton = event.target.closest("[data-condition-legend]");

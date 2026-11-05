@@ -6,9 +6,9 @@
     <meta name="description" content="手机市场行情监控：按日追踪 891 个机型与 TOP100 重点机型的报价变化。" />
     <meta name="theme-color" content="#171a16" />
     <title>价脉 Price Pulse · 手机市场行情监控</title>
-    <link rel="stylesheet" href="styles.css?v=20261105a" />
-    <script src="assets/data.js?v=20261105a" defer></script>
-    <script src="app.js?v=20261105a" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20261105b" />
+    <script src="assets/data.js?v=20261105b" defer></script>
+    <script src="app.js?v=20261105b" defer></script>
   </head>
   <body>
     <div class="page-grain" aria-hidden="true"></div>
@@ -239,6 +239,39 @@
           </article>
         </section>
 
+        <section class="panel condition-spread-panel" id="condition-spread" aria-labelledby="spreadTitle">
+          <header class="panel-header spread-header">
+            <div>
+              <div class="panel-kicker">CONDITION LADDER / 成色价差</div>
+              <h2 id="spreadTitle">成色阶梯有没有真正拉开价差</h2>
+              <p class="panel-note" id="spreadSubtitle">同日、同机型、同主内存，以靓机为基准比较四组成色价差。</p>
+            </div>
+            <div class="spread-header-meta">
+              <span id="spreadScope">全量 · 主配置 · 11.02</span>
+              <button class="spread-method-button" type="button" data-method-open>指标字典 <span>↗</span></button>
+            </div>
+          </header>
+          <div class="spread-layout">
+            <div class="spread-lead">
+              <div class="spread-kpis">
+                <div><span>最深折价</span><strong id="spreadDeepestValue">—</strong><small id="spreadDeepestLabel">—</small></div>
+                <div><span>最大倒挂</span><strong id="spreadInversionValue">—</strong><small id="spreadInversionLabel">—</small></div>
+                <div><span>7 日序列一致</span><strong id="spreadSameValue">—</strong><small id="spreadSameLabel">—</small></div>
+              </div>
+              <p class="spread-summary" id="spreadSummary">正在计算成色价差结构。</p>
+              <div class="spread-warning" id="spreadWarning">
+                <span aria-hidden="true">!</span>
+                <p id="spreadWarningText">正在复核同价样本。</p>
+              </div>
+            </div>
+            <div class="spread-detail">
+              <div class="spread-detail-head"><span>较「靓机」的成色结构</span><small>点击成色行联动全站筛选</small></div>
+              <div class="spread-list" id="conditionSpreadList" role="list"></div>
+            </div>
+          </div>
+          <p class="spread-foot" id="spreadFoot">主配置 × 同机型同内存；同价样本不参与中位价差；倒挂=目标成色高于靓机。</p>
+        </section>
+
         <section class="dashboard-grid brand-grid" id="brands">
           <article class="panel heatmap-panel">
             <header class="panel-header"><div><div class="panel-kicker">BRAND PULSE / 品牌脉冲</div><h2>品牌 × 成色涨跌热力</h2></div><div class="heat-legend"><span>跌</span><i class="heat-scale"></i><span>涨</span><em id="heatScopeLabel">全量口径 · 日涨跌幅</em></div></header>
@@ -279,11 +312,11 @@
         <section class="quality-strip" id="quality">
           <div class="quality-title"><div class="panel-kicker">DATA HEALTH / 数据体检</div><h2>7 天报价可用，异常不混入趋势。</h2><p id="qualitySummary">最新批次 13,020 条记录；内存缺失与零价单独隔离。</p></div>
           <div class="quality-metrics"><div><span>7日有效记录</span><strong id="qualityTotalSkus">65,040</strong><small>7 份日报价单</small></div><div><span>最新两日可匹配</span><strong id="qualityMatchRate">78.7%</strong><small id="qualityMatchCount">5,191 条可比</small></div><div><span>内存缺失</span><strong id="qualityMissingMemory">20</strong><small>未进入机型比较</small></div><div class="quality-warning"><span>异常跳价</span><strong id="qualityAnomalies">649</strong><small>超过 ±30%，已隔离</small></div></div>
-          <button class="quality-action" type="button" data-method-open>查看完整口径 <span>↗</span></button>
+          <button class="quality-action" type="button" data-method-open>指标字典与血缘 <span>↗</span></button>
           <div class="quality-timeline" id="qualityTimeline" role="group" aria-label="7日有效报价趋势"></div>
         </section>
 
-        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.4</span></div><p id="footerDemoNote">基于 2026.10.27–11.02 七份报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.05</span></footer>
+        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.5</span></div><p id="footerDemoNote">基于 2026.10.27–11.02 七份报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.05</span></footer>
       </main>
     </div>
 
@@ -302,15 +335,56 @@
     </aside>
 
     <dialog class="method-dialog" id="methodDialog">
-      <div class="dialog-head"><div><span class="panel-kicker">METHODOLOGY / 口径说明</span><h2>这组行情指数怎么算？</h2></div><button type="button" data-method-close aria-label="关闭口径说明"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+      <div class="dialog-head"><div><span class="panel-kicker">METHODOLOGY / 指标字典与数据血缘</span><h2>口径、指标、来源，放在同一页。</h2></div><button type="button" data-method-close aria-label="关闭口径说明"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
       <div class="dialog-body">
-        <div class="method-step"><span>01</span><div><strong>对齐同一 SKU</strong><p>以「日期 + 机型 ID + 内存 + 成色」为唯一键；内存缺失和同日重复记录单独隔离。</p></div></div>
-        <div class="method-step"><span>02</span><div><strong>只比较相邻两日同一 SKU</strong><p>零价、退出榜单和缺失日期不当作降价；新进榜也不当作涨价。</p></div></div>
-        <div class="method-step"><span>03</span><div><strong>指数使用中位数并隔离跳价</strong><p>日涨跌超过 ±30% 视为异常跳价，不进入指数和品牌热力，仍保留在价格异常统计中。</p></div></div>
-        <div class="method-step"><span>04</span><div><strong>TOP100 为固定重点池</strong><p>选取近 7 日靓机连续有价、按最新靓机市场价排序的前 100 款机型；与全量口径分开计算。</p></div></div>
-        <div class="method-step"><span>05</span><div><strong>样本不足不输出强弱结论</strong><p>品牌或成色可比样本少于 5 条时标记“样本不足”，不进入排行结论。</p></div></div>
-        <div class="method-step"><span>06</span><div><strong>报价矩阵与目标池</strong><p>买家按「内存 × 成色」查看参考价；目标池为 1,000 款，当前在榜 891 款，缺口 109 款单独进入运营待办。演示数据仅主配置使用真实脱敏行情，其他内存为演示阶梯，接入真实多内存报价后自动替换。</p></div></div>
-        <div class="method-step"><span>07</span><div><strong>结构分析与固定队列</strong><p>涨跌分布和价格带仅使用主配置报价；筛选“全部”时汇总五类成色观察，同一机型可有多成色记录。固定队列选取当前成色 7 日连续有价的同一批机型，按每日中位涨跌复利形成指数；筛选“全部”时明确采用靓机固定队列。</p></div></div>
+        <div class="methodology-intro">
+          <div><span class="panel-kicker">SHARED DEFINITION</span><h3>同一套口径，给运营、数据与产品共同使用。</h3></div>
+          <p>当前观察批次 <strong id="methodAsOf">2026.11.02 · 18:06</strong>；公网为脱敏演示数据，不连接生产服务。</p>
+        </div>
+
+        <section class="methodology-section" aria-labelledby="methodStepsTitle">
+          <div class="methodology-section-head"><div><span>01 / CALCULATION</span><h3 id="methodStepsTitle">计算口径</h3></div><p>以下规则对所有日期、范围和成色筛选同步生效。</p></div>
+          <div class="method-step-grid">
+            <div class="method-step"><span>01</span><div><strong>对齐同一 SKU</strong><p>以「日期 + 机型 ID + 内存 + 成色」为唯一键；同日同 SKU 只保留一个确认价，内存缺失与重复记录单独隔离。</p></div></div>
+            <div class="method-step"><span>02</span><div><strong>只比较相邻两日同一 SKU</strong><p>零价、退出榜单和缺失日期不当作降价；新进榜也不当作涨价。</p></div></div>
+            <div class="method-step"><span>03</span><div><strong>指数使用中位数并隔离跳价</strong><p>日涨跌超过 ±30% 视为异常跳价，不进入指数和品牌热力，仍保留在价格异常统计中。</p></div></div>
+            <div class="method-step"><span>04</span><div><strong>TOP100 为固定重点池</strong><p>选取近 7 日靓机连续有价、按最新靓机市场价排序的前 100 款机型；与全量口径分开计算。</p></div></div>
+            <div class="method-step"><span>05</span><div><strong>样本不足不输出强弱结论</strong><p>品牌或成色可比样本少于 5 条时标记“样本不足”，不进入排行结论。</p></div></div>
+            <div class="method-step"><span>06</span><div><strong>报价矩阵与目标池</strong><p>买家按「内存 × 成色」查看参考价；目标池为 1,000 款，当前在榜 891 款，缺口 109 款单独进入运营待办。</p></div></div>
+            <div class="method-step"><span>07</span><div><strong>成色价差与固定队列</strong><p>成色价差仅取主配置、以靓机为基准，同价样本单列且不进入中位价差；固定队列选取当前成色 7 日连续有价的同一批机型，按每日中位涨跌复利形成指数。</p></div></div>
+          </div>
+        </section>
+
+        <section class="methodology-section" aria-labelledby="metricDictionaryTitle">
+          <div class="methodology-section-head"><div><span>02 / METRIC DICTIONARY</span><h3 id="metricDictionaryTitle">指标字典</h3></div><p>从指标名称追到公式、来源和责任角色。</p><span class="freshness-badge"><i aria-hidden="true"></i><b id="methodFreshness">T+0 · 11.02 18:06</b></span></div>
+          <div class="metric-table-wrap">
+            <table class="metric-table">
+              <caption class="sr-only">市场价格监控指标字典</caption>
+              <thead><tr><th scope="col">指标</th><th scope="col">定义</th><th scope="col">计算公式</th><th scope="col">数据来源</th><th scope="col">更新频率</th><th scope="col">责任角色</th><th scope="col">当前新鲜度</th></tr></thead>
+              <tbody id="metricDictionaryBody"></tbody>
+            </table>
+            <div class="method-table-hint">左右滑动查看完整指标字段 →</div>
+          </div>
+        </section>
+
+        <section class="methodology-section" aria-labelledby="lineageTitle">
+          <div class="methodology-section-head"><div><span>03 / DATA LINEAGE</span><h3 id="lineageTitle">数据血缘</h3></div><p>从原始日报价到看板指标，每一步都可定位输入与输出。</p></div>
+          <ol class="lineage-track">
+            <li><span>01</span><strong>日报报价单</strong><small>每日 5 类成色 · 机型 / 内存 / 成色 / 市场价</small></li>
+            <li><span>02</span><strong>SKU 唯一键归一</strong><small>日期 + 机型ID + 内存 + 成色</small></li>
+            <li><span>03</span><strong>质量隔离</strong><small>零价 / 缺内存 / 同日重复 / ±30% 异常</small></li>
+            <li><span>04</span><strong>日快照</strong><small>891 款 · 2,604 个内存配置 · 7 日窗口</small></li>
+            <li><span>05</span><strong>指标计算</strong><small>指数 / 广度 / 队列 / 价格带 / 成色价差</small></li>
+            <li><span>06</span><strong>监控看板</strong><small>运营监控 · 买家报价参考 · 数据体检</small></li>
+          </ol>
+        </section>
+
+        <div class="method-data-note">
+          <div><span>源头</span><strong>日报报价单</strong><small>7 份自然日报价快照</small></div>
+          <div><span>主配置</span><strong>真实脱敏行情</strong><small>成色价差仅使用此层</small></div>
+          <div><span>演示配置</span><strong>synthetic-demo</strong><small>非主配置内存阶梯，不进入价差</small></div>
+          <div><span>更新节奏</span><strong>日更 · T+0</strong><small>演示批次 18:06 入库</small></div>
+        </div>
       </div>
       <div class="dialog-foot"><span id="methodFooterNote">当前为 7 日报价口径；指数仅反映报价变化，不等同成交量或利润。</span><button type="button" data-method-close>我知道了</button></div>
     </dialog>
