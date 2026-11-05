@@ -6,9 +6,9 @@
     <meta name="description" content="手机市场行情监控：按日追踪 891 个机型与 TOP100 重点机型的报价变化。" />
     <meta name="theme-color" content="#171a16" />
     <title>价脉 Price Pulse · 手机市场行情监控</title>
-    <link rel="stylesheet" href="styles.css?v=20261105b" />
-    <script src="assets/data.js?v=20261105b" defer></script>
-    <script src="app.js?v=20261105b" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20261105c" />
+    <script src="assets/data.js?v=20261105c" defer></script>
+    <script src="app.js?v=20261105c" defer></script>
   </head>
   <body>
     <div class="page-grain" aria-hidden="true"></div>
@@ -336,7 +336,7 @@
 
     <dialog class="method-dialog" id="methodDialog">
       <div class="dialog-head"><div><span class="panel-kicker">METHODOLOGY / 指标字典与数据血缘</span><h2>口径、指标、来源，放在同一页。</h2></div><button type="button" data-method-close aria-label="关闭口径说明"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
-      <div class="dialog-body">
+      <div class="dialog-body" tabindex="0" aria-label="指标字典与数据血缘内容，可滚动">
         <div class="methodology-intro">
           <div><span class="panel-kicker">SHARED DEFINITION</span><h3>同一套口径，给运营、数据与产品共同使用。</h3></div>
           <p>当前观察批次 <strong id="methodAsOf">2026.11.02 · 18:06</strong>；公网为脱敏演示数据，不连接生产服务。</p>
@@ -357,7 +357,7 @@
 
         <section class="methodology-section" aria-labelledby="metricDictionaryTitle">
           <div class="methodology-section-head"><div><span>02 / METRIC DICTIONARY</span><h3 id="metricDictionaryTitle">指标字典</h3></div><p>从指标名称追到公式、来源和责任角色。</p><span class="freshness-badge"><i aria-hidden="true"></i><b id="methodFreshness">T+0 · 11.02 18:06</b></span></div>
-          <div class="metric-table-wrap">
+          <div class="metric-table-wrap" tabindex="0" role="region" aria-label="指标字典表格，可横向滚动">
             <table class="metric-table">
               <caption class="sr-only">市场价格监控指标字典</caption>
               <thead><tr><th scope="col">指标</th><th scope="col">定义</th><th scope="col">计算公式</th><th scope="col">数据来源</th><th scope="col">更新频率</th><th scope="col">责任角色</th><th scope="col">当前新鲜度</th></tr></thead>

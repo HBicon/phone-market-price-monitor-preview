@@ -5400,6 +5400,20 @@ th {
   flex-direction: column;
 }
 
+.dialog-head .panel-kicker {
+  color: #b9bdae;
+}
+
+.method-step > span {
+  color: var(--up-text);
+}
+
+.dialog-body:focus-visible,
+.metric-table-wrap:focus-visible {
+  outline: 2px solid var(--up-text);
+  outline-offset: -3px;
+}
+
 .dialog-head,
 .dialog-foot {
   flex: 0 0 auto;
@@ -5571,6 +5585,8 @@ th {
   border-bottom: 1px solid var(--line);
   vertical-align: top;
   text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .metric-table tbody tr:last-child th,
