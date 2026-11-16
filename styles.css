@@ -2470,6 +2470,18 @@ tbody tr:focus-visible {
   text-align: center;
 }
 
+.footer-prd-link {
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 2px;
+}
+
+.footer-prd-link:hover {
+  color: var(--lime);
+  text-decoration-color: currentColor;
+}
+
 .mobile-nav {
   display: none;
 }

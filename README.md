@@ -7,6 +7,13 @@
 - 评审站：https://hbicon.github.io/phone-market-price-monitor-preview/
 - 代码仓库：https://github.com/HBicon/phone-market-price-monitor-preview
 - 公网数据已脱敏：保留真实 7 日价格变化结构，绝对值做不可逆比例变换，不公开原始报价。
+- 正式 PRD（含价格展示 UI 规范与 8 张评审截图）：[docs/价脉-手机市场行情监控-PRD-v1.1.md](docs/价脉-手机市场行情监控-PRD-v1.1.md)
+- PRD 在线评审页：[docs/prd.html](docs/prd.html)
+- 历史方案：[docs/产品方案-v1.0.md](docs/产品方案-v1.0.md)
+
+## 数据窗口说明
+
+当前公网原型使用已提供的 7 日报价数据，数据窗口为 `2026-10-27` 至 `2026-11-02`。原型尚未接入每日接口，因此 `2026-11-03` 之后不会自动产生新日期或新价格；这是演示数据已冻结，不是指标计算丢失。正式产品将按每日 API 批次更新，并在批次超过 24 小时未更新时显示过期提示，同时保留最后一次成功发布的快照。
 
 ## 本地预览
 
