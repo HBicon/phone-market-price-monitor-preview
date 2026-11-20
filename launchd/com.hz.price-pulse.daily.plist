@@ -12,12 +12,26 @@
   <key>WorkingDirectory</key>
   <string>/Users/hz/Documents/ChatGPT/产品PRD/REQ-20261103-001-手机市场行情监控看板</string>
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>5</integer>
-    <key>Minute</key>
-    <integer>0</integer>
-  </dict>
+  <array>
+    <dict>
+      <key>Hour</key>
+      <integer>5</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>6</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>7</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+  </array>
   <key>StandardOutPath</key>
   <string>/Users/hz/Documents/ChatGPT/产品PRD/REQ-20261103-001-手机市场行情监控看板/data/logs/launchd.log</string>
   <key>StandardErrorPath</key>

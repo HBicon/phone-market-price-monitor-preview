@@ -233,7 +233,7 @@ input[type="checkbox"]{accent-color:#829d18;width:15px;height:15px;margin-right:
 <li class="toc-l2"><a href="#附录-b接口返回的最小错误结构">附录 B：接口返回的最小错误结构</a></li></ol></details>
     <main class="doc"><h1>价脉 Price Pulse｜手机市场价格监控看板 PRD</h1>
 <blockquote>
-<p>文档版本：v1.2（评审稿）<br>更新日期：2026-11-20<br>文档状态：业务、数据、产品、设计与研发可评审；研发排期前需完成接口、口径、权限和设计走查确认<br>参考原型：<a href="https://hbicon.github.io/phone-market-price-monitor-preview/">https://hbicon.github.io/phone-market-price-monitor-preview/</a><br>原型版本：Prototype 0.7<br>数据基础：Boss 系统版报表 <code>501211</code>（报价单：实时竞拍参考价）每日拉取，已入库 91 个自然日；看板默认分析最近 90 天，可在累计入库达到 180 天后扩展到 180 天<br>更新机制：每日 <code>05:00</code> 拉取前一日已结算业务日期，并强制重拉最近 3 个业务日，补齐延迟结算或未完整导出的批次<br>价格口径：市场参考价，非成交价、非结算价、非毛利价<br>适用端：桌面 Web 为主，390px 移动端可读；公网仅发布脱敏演示数据</p>
+<p>文档版本：v1.2（评审稿）<br>更新日期：2026-11-20<br>文档状态：业务、数据、产品、设计与研发可评审；研发排期前需完成接口、口径、权限和设计走查确认<br>参考原型：<a href="https://hbicon.github.io/phone-market-price-monitor-preview/">https://hbicon.github.io/phone-market-price-monitor-preview/</a><br>原型版本：Prototype 0.7<br>数据基础：Boss 系统版报表 <code>501211</code>（报价单：实时竞拍参考价）每日拉取，已入库 91 个自然日；看板默认分析最近 90 天，可在累计入库达到 180 天后扩展到 180 天<br>更新机制：每日 <code>05:00</code> 拉取前一日已结算业务日期；若该业务日仍无有效数据或当日发布未完成，<code>06:00</code>、<code>07:00</code> 各自动补跑一次，并强制重拉最近 3 个业务日<br>价格口径：市场参考价，非成交价、非结算价、非毛利价<br>适用端：桌面 Web 为主，390px 移动端可读；公网仅发布脱敏演示数据</p>
 </blockquote>
 <hr>
 <h2 id="0.-文档信息">0. 文档信息<a class="anchor" href="#0.-文档信息" aria-label="链接到本节">#</a></h2>
@@ -272,7 +272,7 @@ input[type="checkbox"]{accent-color:#829d18;width:15px;height:15px;margin-right:
 <tr>
 <td>v1.2</td>
 <td>2026-11-20</td>
-<td>切换为 Boss 系统版报表 <code>501211</code> 的 90 天真实数据窗口；补齐每日 05:00 自动更新、SQLite 历史存储、180 天扩展、部分覆盖日隔离和 TOP100 规则；重截 8 张 90 天版本 UI 截图</td>
+<td>切换为 Boss 系统版报表 <code>501211</code> 的 90 天真实数据窗口；补齐每日 05:00 自动更新及 06:00 / 07:00 缺数补跑、SQLite 历史存储、180 天扩展、部分覆盖日隔离和 TOP100 规则；重截 8 张 90 天版本 UI 截图</td>
 <td>评审稿</td>
 </tr>
 </tbody></table></div>
@@ -310,7 +310,7 @@ input[type="checkbox"]{accent-color:#829d18;width:15px;height:15px;margin-right:
 <li>市场价</li>
 </ul>
 <p>成色固定为靓机、小花、大花、外爆、内爆五类。业务方需要按天观察市场整体、品牌和单机型的价格变化，同时让采购、报价和运营使用同一套参考价，减少在 Excel、群消息和人工汇总之间来回切换。</p>
-<p>当前已完成近 90 天真实结构验证：891 款机型、2,607 个内存配置；2026-08-22 至 11-20 累计 820,320 个唯一键，其中 672,051 条有价，覆盖 8 个品牌。最新完整日 2026-11-19 为 13,020 个唯一键、12,284 条有价；最新业务日 2026-11-20 为 9,250 个唯一键、8,846 条有价。页面按实际入库结果动态计算，不写死这些数字。</p>
+<p>当前已完成近 90 天真实结构验证：891 款机型、2,607 个内存配置；默认 90 天窗口（2026-08-23 至 11-20）累计 811,495 个唯一键，其中 665,174 条有价，覆盖 8 个品牌；完整数据包（2026-08-22 起）累计 820,320 个唯一键、672,051 条有价。最新完整日 2026-11-19 为 13,020 个唯一键、12,284 条有价；最新业务日 2026-11-20 为 9,250 个唯一键、8,846 条有价。页面按实际入库结果动态计算，不写死这些数字。</p>
 <h3 id="1.3-产品目标">1.3 产品目标<a class="anchor" href="#1.3-产品目标" aria-label="链接到本节">#</a></h3>
 <div class="table-wrap"><table>
 <thead>
@@ -707,7 +707,7 @@ input[type="checkbox"]{accent-color:#829d18;width:15px;height:15px;margin-right:
 </tr>
 <tr>
 <td>市场指数</td>
-<td>当前指数 <code>61.56</code>、日变化 <code>−0.24%</code>、90 日累计 <code>−38.44%</code></td>
+<td>当前指数 <code>61.94</code>、日变化 <code>−0.24%</code>、90 日累计 <code>−38.06%</code></td>
 <td>基准日 <code>2026.08.23 = 100</code>；剔除单日 ±30% 异常</td>
 <td>无可比样本显示“无可比”，不显示 0</td>
 </tr>
@@ -1357,7 +1357,7 @@ input[type="checkbox"]{accent-color:#829d18;width:15px;height:15px;margin-right:
 <tr>
 <td>数据是否实时</td>
 <td>通过（原型调度）</td>
-<td>每日 05:00 由本机 <code>launchd</code> 拉取；生产环境仍需改为服务端调度与告警</td>
+<td>每日 05:00 由本机 <code>launchd</code> 拉取；06:00 / 07:00 缺数补跑；生产环境仍需改为服务端调度与告警</td>
 </tr>
 </tbody></table></div>
 <p><strong>v1.2 已修复的展示问题</strong>：</p>
@@ -1486,7 +1486,7 @@ input[type="checkbox"]{accent-color:#829d18;width:15px;height:15px;margin-right:
 </ol>
 <p>这条规则是行情可信度的底线。价格可以被修正，但不能悄悄改变。</p>
 <h3 id="5.3-数据分层">5.3 数据分层<a class="anchor" href="#5.3-数据分层" aria-label="链接到本节">#</a></h3>
-<pre><code class="language-text">Boss 报表 501211 / 每日 05:00 调度
+<pre><code class="language-text">Boss 报表 501211 / 每日 05:00 调度 + 06:00 / 07:00 缺数补跑
         ↓
 ODS 原始 XLSX（data/raw/YYYY-MM-DD.xlsx）
         ↓
@@ -1633,10 +1633,10 @@ ADS 最多 180 天聚合数据与公网脱敏 data.js
 <hr>
 <h2 id="6.-接口方案">6. 接口方案<a class="anchor" href="#6.-接口方案" aria-label="链接到本节">#</a></h2>
 <h3 id="6.1-数据接入boss-报表定时拉取当前">6.1 数据接入：Boss 报表定时拉取（当前）<a class="anchor" href="#6.1-数据接入boss-报表定时拉取当前" aria-label="链接到本节">#</a></h3>
-<p>原型阶段由 macOS <code>launchd</code> 每日 05:00 调用 <code>run_daily_update.sh</code>：</p>
-<pre><code class="language-bash">python3 sync_market_data.py --days 180 --end-date &lt;前一日&gt; --refresh-last 3 --workers 3
-python3 build_dashboard_data.py --days 90 --output data/real/market_data_90d.js
-python3 prepare_public_data.py data/real/market_data_90d.js assets/data.js
+<p>原型阶段由 macOS <code>launchd</code> 在每日 05:00 调用 <code>run_daily_update.sh</code>，并在 06:00、07:00 检查前一业务日是否仍无有效数据或当日发布未完成；仅在需要时补跑：</p>
+<pre><code class="language-bash">python3 sync_market_data.py --days 4 --end-date &lt;前一日&gt; --refresh-last 3 --workers 2
+python3 build_dashboard_data.py --days 180 --output data/real/market_data_180d.js
+python3 prepare_public_data.py data/real/market_data_180d.js assets/data.js
 </code></pre>
 <p>执行顺序为：拉取前一日已结算业务日并强制重拉最近 3 日 → 写入 SQLite → 重建最多 180 天数据（页面默认窗口仍为 90 天）→ 脱敏生成公网数据 → 数据变化时提交并等待 Pages 发布。定时任务不保存 Token 或凭证，复用本机已授权的 Boss CLI 登录态。</p>
 <p>正式环境应把上述本机任务迁移到服务端调度，并接入失败告警、重试和运行审计。以下写入接口是正式 API 化的目标形态。</p>
@@ -2225,7 +2225,7 @@ Idempotency-Key: 20261119-quote-001
 <li>已完成 PC/移动端交互原型；</li>
 <li>已完成 90 天行情、品牌、机型、成色价差、数据体检和指标字典；</li>
 <li>已接入 91 个自然日真实报表结构，支持 7/30/90 天窗口，180 天窗口待累计入库后启用；</li>
-<li>已完成每日 05:00 本机自动拉取、SQLite 存储、脱敏发布和 Pages 更新；</li>
+<li>已完成每日 05:00 本机自动拉取、06:00 / 07:00 缺数补跑、SQLite 存储、脱敏发布和 Pages 更新；</li>
 <li>公网为脱敏演示数据，用于确认信息架构、指标口径和页面优先级，不作为生产数据源。</li>
 </ul>
 <h3 id="阶段-1表单数据正式化">阶段 1：生产数据接入正式化<a class="anchor" href="#阶段-1表单数据正式化" aria-label="链接到本节">#</a></h3>
@@ -2296,7 +2296,7 @@ Idempotency-Key: 20261119-quote-001
 <tbody><tr>
 <td>2026-11-20 最新批次仅覆盖 71%</td>
 <td>当日缺失 SKU 不参与涨跌，最新日结论样本少于完整日</td>
-<td>05:00 强制重拉最近 3 个业务日；页面持续标记“部分覆盖”</td>
+<td>05:00 强制重拉最近 3 个业务日；06:00 / 07:00 在数据缺失或发布未完成时补跑；页面持续标记“部分覆盖”</td>
 </tr>
 <tr>
 <td>90 天窗口有 61 个覆盖不足日</td>
@@ -2347,7 +2347,7 @@ Idempotency-Key: 20261119-quote-001
 <p>需要业务确认：</p>
 <ul>
 <li>每日数据的最晚到达时间、补数截止时间和责任部门；</li>
-<li>前一日报价在 05:00 是否已完成结算；若未完成，是否需要把调度后移到 06:00 或增加午间补跑；</li>
+<li>前一日 07:00 后仍无报价时的告警渠道、人工补录责任人和最晚可接受发布时间；</li>
 <li>“市场价”的准确定义和报价来源；</li>
 <li>目标 1,000 款机型的维护责任人；</li>
 <li>历史数据保留年限和对外导出范围；</li>

@@ -13,7 +13,7 @@
 
 ## 数据窗口说明
 
-- 每日 `05:00` 由 macOS `launchd` 拉取前一日已结算的 Boss 系统版报表 `501211`（报价单：实时竞拍参考价）。
+- 每日 `05:00` 由 macOS `launchd` 拉取前一日已结算的 Boss 系统版报表 `501211`（报价单：实时竞拍参考价）；若该业务日仍无有效数据，或当日发布未完成，`06:00`、`07:00` 各自动补跑一次，已完成则跳过。
 - 每一天均原样保存原始 XLSX 到 `data/raw/`，归一后写入 `data/price_history.sqlite`。
 - 看板默认展示最近 **90 个自然日**，支持 `7D / 30D / 90D / 180D` 窗口切换；累计入库达到 180 天后自动启用 180D。
 - 公网评审站每日增量更新；本地数据库和原始报价不进入公开仓库。
@@ -83,7 +83,13 @@ python3 -m http.server 4173 --bind 127.0.0.1
 launchctl print gui/$(id -u)/com.hz.price-pulse.daily
 ```
 
-每天 `05:00` 执行 `run_daily_update.sh`，流程为：拉取前一日已结算业务日并强制重拉最近 3 个业务日 → 写入 SQLite → 重建最多 180 天数据（默认分析窗口仍为 90 天）→ 脱敏 → 数据有变化时提交并推送 → 等待 Pages 发布。日志位于 `data/logs/`。历史天数通过每日增量累积，累计达到 180 天后自动启用 180D 窗口。
+每天 `05:00` 执行 `run_daily_update.sh`，流程为：拉取前一日已结算业务日并强制重拉最近 3 个业务日 → 写入 SQLite → 重建最多 180 天数据（默认分析窗口仍为 90 天）→ 脱敏 → 数据有变化时提交并推送 → 等待 Pages 发布。`06:00`、`07:00` 会检查该业务日是否已有有效快照且当日发布完成：已完成则跳过，缺数或发布失败才补跑。日志位于 `data/logs/`。历史天数通过每日增量累积，累计达到 180 天后自动启用 180D 窗口。
+
+手动强制刷新可执行：
+
+```bash
+zsh run_daily_update.sh --force
+```
 
 手动补数：
 
@@ -128,7 +134,7 @@ python3 prepare_public_data.py /tmp/price-pulse-real.js assets/data.js
 - `prepare_public_data.py`：将真实价格结构转换为公网脱敏数据。
 - `sync_market_data.py`：按业务日拉取 Boss 系统版报表并写入本地 SQLite。
 - `build_dashboard_data.py`：将近 7/30/90/180 天报价聚合为看板数据。
-- `run_daily_update.sh`：每日 05:00 的同步、重建、提交和发布任务。
+- `run_daily_update.sh`：每日 05:00 的同步、重建、提交和发布任务，06:00 / 07:00 缺数补跑。
 - `launchd/com.hz.price-pulse.daily.plist`：macOS 定时任务定义。
 - `.github/workflows/pages.yml`：独立仓库的 GitHub Pages 发布流程。
 
