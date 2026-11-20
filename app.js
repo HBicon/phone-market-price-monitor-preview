@@ -38,11 +38,20 @@
   const CONDITION_SPREAD_TARGETS = ["小花", "大花", "外爆", "内爆"];
   const METRIC_DEFINITIONS = [
     {
+      name: "分析窗口",
+      code: "ANALYSIS WINDOW",
+      definition: "以所选业务日为终点，向前回溯 7 / 30 / 90 / 180 个自然日；窗口内指数统一重新归一。",
+      formula: "start = dateIndex − windowDays + 1；I₀ = 100；缺失日不补 0",
+      source: "日快照索引 → 当前业务日",
+      frequency: "随日期与窗口切换即时重算",
+      role: "行情运营",
+    },
+    {
       name: "市场指数",
       code: "PRICE INDEX",
       definition: "同一批可比 SKU 的日价格变动中位数，复利形成 100 基期指数。",
       formula: "I_t = I_{t-1} × (1 + median(ΔP_i / P_{i-1}))；I₀ = 100；排除 |Δ| > 30%",
-      source: "日报报价单 → 日快照 → 全内存 SKU",
+      source: "日报报价单 → 日快照 → 全内存 SKU → 当前分析窗口",
       frequency: "日更 · 1 次/交易日",
       role: "数据运营",
     },
@@ -85,9 +94,9 @@
     {
       name: "固定队列指数",
       code: "FIXED COHORT",
-      definition: "同一批 7 日连续有价机型形成的可比趋势，不使用每日新样本洗牌。",
+      definition: "同一批在当前分析窗口内连续有价机型形成的可比趋势，不使用每日新样本洗牌。",
       formula: "C_t = C_{t-1} × (1 + median(队列内日涨跌))；C₀ = 100",
-      source: "日快照 → 主配置 → 当前成色完整 7 日队列",
+      source: "日快照 → 主配置 → 当前成色完整窗口队列",
       frequency: "日更 · 队列固定",
       role: "数据运营",
     },
@@ -101,10 +110,10 @@
       role: "行情运营 / 数据运营",
     },
     {
-      name: "近 7 日中位价与区间",
+      name: "近 30 日中位价与区间",
       code: "BUYER REFERENCE",
-      definition: "同一 SKU 近 7 日有价样本的中位价、P25–P75 与价格位置。",
-      formula: "median(P₁…P₇)；P25 / P75 为同序列四分位；缺价日不补 0",
+      definition: "同一 SKU 近 30 日有价样本的中位价、P25–P75 与价格位置。",
+      formula: "median(近 30 日有价样本)；P25 / P75 为同序列四分位；缺价日不补 0",
       source: "日快照 → 主配置 + 明确标识的演示内存阶梯",
       frequency: "日更 · 随日期窗口滚动",
       role: "行情运营 / 买家参考",
@@ -126,6 +135,7 @@
   const numberFormat = new Intl.NumberFormat("zh-CN");
   const state = {
     dateIndex: data.dates.length - 1,
+    windowDays: Math.min(Number(data.meta.analysisWindowDays || 90), data.dates.length),
     scope: "all",
     condition: "全部",
     brand: "all",
@@ -200,6 +210,39 @@
     return ordered[low] + (ordered[high] - ordered[low]) * (position - low);
   };
   const defaultVisibleCount = () => (state.scope === "top100" ? data.meta.top100 : state.pageSize);
+  const windowStartIndex = (index = state.dateIndex) => Math.max(0, index - state.windowDays + 1);
+  const windowLength = (index = state.dateIndex) => index - windowStartIndex(index) + 1;
+  const windowDates = (index = state.dateIndex) => data.dates.slice(windowStartIndex(index), index + 1);
+  const storedDays = () => Number(data.meta.storedDays || data.dates.length);
+  const maxWindowDays = () => Number(data.meta.maxWindowDays || 180);
+  const analysisWindows = () => [7, 30, 90, 180].filter((days) => days <= storedDays());
+  const windowValidSkus = (index = state.dateIndex) =>
+    windowDates(index).reduce((total, item) => total + Number(item.quality.validKeys || 0), 0);
+  const windowPartialDates = (index = state.dateIndex) =>
+    windowDates(index).filter((item) => item.quality.status !== "complete");
+  const windowDayLabel = () => `${windowLength()} 个快照`;
+  const windowRangeLabel = (index = state.dateIndex) => {
+    const dates = windowDates(index);
+    return `${shortDate(dates[0].date)}–${shortDate(dates[dates.length - 1].date)}`;
+  };
+  const rebaseIndex = (value, base) => {
+    if (value === null || value === undefined || !base) return null;
+    return Number(((Number(value) / Number(base)) * 100).toFixed(2));
+  };
+  const rebaseSeries = (series, index = state.dateIndex) => {
+    const start = windowStartIndex(index);
+    const base = series[start];
+    return series.slice(start, index + 1).map((value) => rebaseIndex(value, base));
+  };
+  const rebaseStat = (item, base) => {
+    if (!item) return item;
+    const index = rebaseIndex(item.index, base);
+    return {
+      ...item,
+      index,
+      week: index === null ? null : Number((index - 100).toFixed(2)),
+    };
+  };
 
   function setDirection(element, value, digits = 2) {
     if (!element) return;
@@ -207,6 +250,17 @@
     element.classList.remove("up-text", "down-text", "is-up", "is-down", "is-warn");
     if (Number(value) > 0) element.classList.add("up-text", "is-up");
     else if (Number(value) < 0) element.classList.add("down-text", "is-down");
+  }
+
+  function coverageBars(history, start, index, maxBars = 10) {
+    const totalDays = index - start + 1;
+    const barCount = Math.min(maxBars, totalDays);
+    return Array.from({ length: barCount }, (_, barIndex) => {
+      const from = start + Math.floor((barIndex * totalDays) / barCount);
+      const to = start + Math.floor(((barIndex + 1) * totalDays) / barCount) - 1;
+      const hasPrice = history.slice(from, to + 1).some((value) => value !== null && value !== undefined);
+      return `<b class="${hasPrice ? "is-on" : ""}"></b>`;
+    }).join("");
   }
 
   function showToast(message) {
@@ -271,10 +325,13 @@
     const previousPrice = index > 0 ? priceAt(model, condition, index - 1) : null;
     const change = previousPrice ? Number((((price / previousPrice) - 1) * 100).toFixed(2)) : null;
     const changeAmount = previousPrice ? price - previousPrice : null;
-    const firstIndex = history.slice(0, index + 1).findIndex((value) => value !== null);
+    const start = windowStartIndex(index);
+    const firstRelative = history.slice(start, index + 1).findIndex((value) => value !== null);
+    const firstIndex = firstRelative >= 0 ? start + firstRelative : -1;
     const firstPrice = firstIndex >= 0 ? history[firstIndex] : null;
     const windowChange = firstPrice && index > firstIndex ? percentChange(price, firstPrice) : index === firstIndex ? 0 : null;
-    const coverageDays = history.slice(0, index + 1).filter((value) => value !== null).length;
+    const coverageDays = history.slice(start, index + 1).filter((value) => value !== null).length;
+    const coverageWindow = windowLength(index);
     const fullCoverage = history.filter((value) => value !== null).length;
     const isAnomaly = change !== null && Math.abs(change) > data.meta.anomalyLimit;
     const impact = change === null ? 0 : Math.abs(change) * Math.log10(price + 10);
@@ -288,6 +345,7 @@
       windowChange,
       windowDays: firstIndex >= 0 ? index - firstIndex : 0,
       coverageDays,
+      coverageWindow,
       fullCoverage,
       history,
       isAnomaly,
@@ -318,12 +376,14 @@
     return history && history[index] !== null && history[index] !== undefined ? history[index] : null;
   }
 
-  function quoteStats(history, index) {
+  function quoteStats(history, index, days = 30) {
     const values = [];
-    let previous = null;
+    const start = Math.max(0, index - days + 1);
+    let previous = start > 0 ? history[start - 1] : null;
     history.forEach((value, dayIndex) => {
-      if (dayIndex > index || value === null) {
-        previous = value === null ? null : previous;
+      if (dayIndex < start || dayIndex > index) return;
+      if (value === null) {
+        previous = null;
         return;
       }
       const change = previous ? percentChange(value, previous) : null;
@@ -340,6 +400,7 @@
       min: values.length ? Math.min(...values) : null,
       max: values.length ? Math.max(...values) : null,
       sample: values.length,
+      availableDays: index - start + 1,
     };
   }
 
@@ -418,7 +479,9 @@
 
   function statsFor(scope, index = state.dateIndex) {
     const scopeData = data.market[scope] || data.market.all;
-    return scopeData.stats[index] || scopeData.stats.at(-1);
+    const start = windowStartIndex(index);
+    const raw = scopeData.stats[index] || scopeData.stats.at(-1);
+    return rebaseStat(raw, scopeData.stats[start]?.index);
   }
 
   function conditionStatsFor(scope, condition, index = state.dateIndex) {
@@ -426,21 +489,23 @@
     const conditionData = data.conditions.find((item) => item.name === condition);
     if (!conditionData) return statsFor(scope, index);
     const series = scope === "all" ? conditionData.stats : conditionData.top100Stats;
-    return series[index] || series.at(-1);
+    const start = windowStartIndex(index);
+    return rebaseStat(series[index] || series.at(-1), series[start]?.index);
   }
 
   function seriesFor(scope, condition) {
-    if (condition === "全部") return (data.market[scope] || data.market.all).indexSeries;
+    if (condition === "全部") return rebaseSeries((data.market[scope] || data.market.all).indexSeries);
     const conditionData = data.conditions.find((item) => item.name === condition);
-    if (!conditionData) return data.market[scope].indexSeries;
-    return scope === "all" ? conditionData.indexSeries : conditionData.top100IndexSeries;
+    if (!conditionData) return rebaseSeries(data.market[scope].indexSeries);
+    return rebaseSeries(scope === "all" ? conditionData.indexSeries : conditionData.top100IndexSeries);
   }
 
   function brandStatsFor(brand, scope = state.scope, index = state.dateIndex) {
     const record = typeof brand === "string" ? data.brands.find((item) => item.name === brand) : brand;
     if (!record) return null;
     const series = scope === "all" ? record.stats : record.top100Stats;
-    return series[index] || series.at(-1);
+    const start = windowStartIndex(index);
+    return rebaseStat(series[index] || series.at(-1), series[start]?.index);
   }
 
   function brandDailyValue(brand, scope = state.scope, index = state.dateIndex) {
@@ -451,12 +516,24 @@
     return { change: conditionStats.change, normal: conditionStats.normal, index: null, stats };
   }
 
+  function brandPeriodChange(brand, scope = state.scope, index = state.dateIndex) {
+    const stats = brandStatsFor(brand, scope, index);
+    if (!stats || stats.index === null) return null;
+    return Number((stats.index - 100).toFixed(2));
+  }
+
   function brandModelCount(brand, scope = state.scope) {
     return data.models.filter((model) => model.brand === brand && inScope(model, scope)).length;
   }
 
   function continuousModels(scope = state.scope) {
-    return data.models.filter((model) => inScope(model, scope) && model.conditions["靓机"].every((value) => value !== null)).length;
+    const start = windowStartIndex();
+    return data.models.filter((model) => {
+      if (!inScope(model, scope)) return false;
+      const history = model.conditions["靓机"] || [];
+      const values = history.slice(start, state.dateIndex + 1);
+      return values.length > 0 && values.every((value) => value !== null);
+    }).length;
   }
 
   function analysisRows(index = state.dateIndex) {
@@ -562,7 +639,12 @@
       const baseHistory = model.conditions[CONDITION_SPREAD_BASE];
       return baseHistory && THREE_TIER_CONDITIONS.every((condition) => {
         const history = model.conditions[condition];
-        return history && history.length === baseHistory.length && baseHistory.every((value, dayIndex) => value === history[dayIndex]);
+        if (!history) return false;
+        const start = windowStartIndex();
+        for (let dayIndex = start; dayIndex <= state.dateIndex; dayIndex += 1) {
+          if (baseHistory[dayIndex] !== history[dayIndex]) return false;
+        }
+        return true;
       });
     }).length;
     return {
@@ -578,11 +660,20 @@
   }
 
   function fixedCohortData(scope = state.scope, condition = state.condition === "全部" ? "靓机" : state.condition) {
-    const models = data.models.filter((model) => inScope(model, scope) && model.conditions[condition]?.every((value) => value !== null && value !== undefined));
+    const start = windowStartIndex();
+    const dates = windowDates();
+    const models = data.models.filter((model) => {
+      if (!inScope(model, scope)) return false;
+      const history = model.conditions[condition];
+      if (!history) return false;
+      const values = history.slice(start, state.dateIndex + 1);
+      return values.length === dates.length && values.every((value) => value !== null && value !== undefined);
+    });
     const series = [100];
     const changes = [0];
     const samples = [models.length];
-    for (let index = 1; index < data.dates.length; index += 1) {
+    for (let localIndex = 1; localIndex < dates.length; localIndex += 1) {
+      const index = start + localIndex;
       const daily = [];
       models.forEach((model) => {
         const history = model.conditions[condition];
@@ -595,8 +686,8 @@
       series.push(Number((series.at(-1) * (1 + dailyMedian / 100)).toFixed(2)));
     }
     const marketSeries = seriesFor(scope, condition);
-    const selectedIndex = series[state.dateIndex] ?? null;
-    const marketIndex = marketSeries[state.dateIndex] ?? null;
+    const selectedIndex = series.at(-1) ?? null;
+    const marketIndex = marketSeries.at(-1) ?? null;
     return {
       models,
       condition,
@@ -605,9 +696,9 @@
       samples,
       sample: models.length,
       selectedIndex,
-      selectedChange: changes[state.dateIndex] ?? null,
-      selectedSample: samples[state.dateIndex] ?? 0,
-      cumulative: state.dateIndex === 0 || selectedIndex === null ? null : selectedIndex - 100,
+      selectedChange: changes.at(-1) ?? null,
+      selectedSample: samples.at(-1) ?? 0,
+      cumulative: selectedIndex === null ? null : selectedIndex - 100,
       marketSeries,
       marketIndex,
       difference: selectedIndex === null || marketIndex === null ? null : selectedIndex - marketIndex,
@@ -668,7 +759,7 @@
     const mover = focusRows[0] || null;
     const headline = daily === null
       ? `${scopeLabel()}价格基准建立，等待下一交易日`
-      : `${scopeLabel()}日线 ${signedPercent(daily)}，7日累计 ${signedPercent(weekly)}`;
+      : `${scopeLabel()}日线 ${signedPercent(daily)}，${windowLength()}日累计 ${signedPercent(weekly)}`;
     const brandText = strongest && weakest
       ? `最强 ${strongest.brand.name} ${signedPercent(strongest.value.change)}，最弱 ${weakest.brand.name} ${signedPercent(weakest.value.change)}`
       : "当前品牌可比样本不足，暂不输出强弱结论";
@@ -702,11 +793,12 @@
     const copyText = [
       `【价脉行情简报】${longDate(currentDate().date)}｜${scopeLabel()} · ${conditionLabel()}`,
       `方向：${headline}`,
-      `指数：${fixed(stats.index, 2)}；日变动 ${signedPercent(daily)}；7日累计 ${signedPercent(weekly)}`,
+      `指数：${fixed(stats.index, 2)}；日变动 ${signedPercent(daily)}；${windowLength()}日累计 ${signedPercent(weekly)}`,
       `广度：全内存 SKU 上涨 ${num(stats.up)} / 下跌 ${num(stats.down)} / 持平 ${num(stats.flat)}；下跌面 ${downShare === null ? "—" : `${fixed(downShare, 1)}%`}`,
       `品牌：${brandText}`,
       `异动：${moveText}`,
       `质量：异常跳价 ${num(anomalies)} 条已隔离；报价有价率 ${fixed(coverage, 1)}%`,
+      `批次：${currentDate().quality.status === "complete" ? "完整覆盖" : `部分覆盖（${num(currentDate().quality.rowCount || currentDate().quality.rows)} 行，缺失不按降价）`}`,
       `动作：${actions.map((action) => `${action.level} ${action.title}`).join("；")}`,
       `口径：指数、广度、品牌为全内存 SKU；分布、价格带为主配置 × ${analysisConditionNote()}；固定队列为主配置 × ${cohort.condition}；异常跳价 ±30% 不进入趋势；报价为参考价，非成交价。`,
     ].join("\n");
@@ -767,15 +859,25 @@
   function renderDateChrome() {
     const date = currentDate();
     const quality = currentQuality();
+    const partialDates = windowPartialDates();
     const month = Number(date.date.slice(5, 7));
     $("#dateDay").textContent = date.date.slice(8, 10);
     $("#dateMonth").textContent = `${month}月`;
     $("#dateMeta").textContent = `${date.date.slice(0, 4)} · ${date.weekday}`;
     $("#datePicker").value = String(state.dateIndex);
-    $("#heroDateStatus").textContent = `${date.label}行情${state.dateIndex === data.dates.length - 1 ? "已更新" : "快照"}`;
-    $("#heroDateRange").textContent = `${longDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} / ${data.meta.updatedAt} CST`;
+    const qualityLabel = quality.status === "complete"
+      ? "完整覆盖"
+      : quality.status === "warning"
+        ? "覆盖偏低"
+        : quality.status === "invalid"
+          ? "数据冲突"
+          : "部分覆盖";
+    $("#heroDateStatus").textContent = `${date.label} · ${qualityLabel}`;
+    $("#heroDateRange").textContent = `${windowRangeLabel()} / ${windowLength()} 个快照 · ${data.meta.updatedAt} CST`;
     $("#heroModelCount").textContent = num(data.meta.totalModels);
-    $("#heroTotalSkus").textContent = num(data.meta.totalSkus);
+    $("#heroTotalSkus").textContent = num(windowValidSkus());
+    const heroWindowLabel = $("#heroWindowLabel");
+    if (heroWindowLabel) heroWindowLabel.textContent = `近 ${windowLength()} 日`;
     $("#heroValidSkus").textContent = num(quality.validKeys);
     $("#heroCoverage").textContent = `${fixed(quality.coverage, 1)}%`;
     $("#sideValidSkus").textContent = num(quality.validKeys);
@@ -783,16 +885,32 @@
     $("#sideCoverageBar").style.width = `${quality.coverage}%`;
     const sideHeading = $(".live-block .live-heading");
     if (sideHeading) sideHeading.innerHTML = `<span class="live-dot"></span> ${escapeHtml(date.label)}快照已入库`;
-    $("#sideDateRange").textContent = `${shortDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} · 7 个自然日报价快照${data.meta.demo ? "；价格为脱敏演示值。" : "。"}`;
+    $("#sideDateRange").textContent = `${shortDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} · 本地库存 ${num(storedDays())} 个自然日报价快照${data.meta.demo ? "；价格为脱敏演示值。" : "。"}`;
     $("#tapeTime").textContent = `UPDATED ${data.meta.updatedAt} · ${shortDate(date.date)}`;
     $("#footerDemoNote").textContent = data.meta.demo
-      ? `基于真实 ${longDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} 报价结构脱敏；价格为演示值，仅用于 UI 评审。`
-      : `基于 ${longDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} 七份报价单；价格为业务参考价，仅用于内部评审。`;
+      ? `基于真实 ${longDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} 报价结构脱敏；当前展示窗口 ${windowLength()} 天，价格为演示值，仅用于 UI 评审。`
+      : `基于 ${longDate(data.meta.dateFrom)}–${shortDate(data.meta.dateTo)} 的 ${num(storedDays())} 份日报价单；当前展示窗口 ${windowLength()} 天，价格为业务参考价，仅用于内部评审。`;
     $("#demoInline").hidden = !data.meta.demo;
     const methodFooter = $("#methodFooterNote");
     if (methodFooter) methodFooter.textContent = data.meta.demo
-      ? "当前为 7 日脱敏演示口径；指数仅反映相对报价变化，不等同成交量或利润。"
-      : "当前为 7 日真实报价口径；指数仅反映报价变化，不等同成交量或利润。";
+      ? `当前为 ${windowLength()} 日脱敏演示口径；指数仅反映相对报价变化，不等同成交量或利润。`
+      : `当前为 ${windowLength()} 日真实报价口径；指数仅反映报价变化，不等同成交量或利润。`;
+    const windowFlag = $("#heroWindowFlag");
+    if (windowFlag) windowFlag.textContent = `${windowLength()}-DAY VIEW`;
+    const briefWindowFlag = $("#briefWindowFlag");
+    if (briefWindowFlag) briefWindowFlag.textContent = `${windowLength()}D`;
+    const sideWindowStamp = $("#sideWindowStamp");
+    if (sideWindowStamp) sideWindowStamp.textContent = `${windowLength()}D`;
+    const partialNotice = $("#partialNotice");
+    if (partialNotice) {
+      partialNotice.hidden = partialDates.length === 0;
+      if (quality.status !== "complete") {
+        partialNotice.textContent = `${date.label}仅 ${num(quality.rowCount || quality.rows)} 行（${qualityLabel}），当日缺失 SKU 不进入涨跌与指数计算；页面结论以可比同 SKU 为准。`;
+      } else if (partialDates.length) {
+        const latestPartial = partialDates.at(-1);
+        partialNotice.textContent = `当前 ${windowLength()} 日窗口含 ${num(partialDates.length)} 个覆盖不足日，最近为 ${latestPartial.short}（${num(latestPartial.quality.rowCount || latestPartial.quality.rows)} 行）；缺失 SKU 不按降价处理，趋势仅比较相邻日同 SKU。`;
+      }
+    }
   }
 
   function renderMethodology() {
@@ -825,11 +943,14 @@
   function renderKpis() {
     const stats = conditionStatsFor(state.scope, state.condition);
     const scopeStats = statsFor(state.scope);
-    $("#metricIndexLabel").textContent = `${scopeLabel()}${state.condition === "全部" ? "市场" : ` · ${state.condition}`}指数`;
+    $("#metricIndexLabel").textContent = `${scopeLabel()}${state.condition === "全部" ? "市场" : ` · ${state.condition}`}指数 · ${windowLength()}D`;
     $("#marketIndex").textContent = fixed(stats.index, 2);
     setDirection($("#marketChange"), state.dateIndex === 0 ? 0 : stats.change);
-    $("#marketSpark").innerHTML = sparkline(seriesFor(state.scope, state.condition).slice(0, state.dateIndex + 1), state.condition === "全部" ? "#c8ef6a" : conditionColor(state.condition), 88, 25);
-    $("#metricIndexFoot").textContent = state.dateIndex === 0 ? "基准日 · 暂无前一交易日" : `较 ${previousDate().label} · 剔除 ±${data.meta.anomalyLimit}% 跳价`;
+    $("#marketSpark").innerHTML = sparkline(seriesFor(state.scope, state.condition), state.condition === "全部" ? "#c8ef6a" : conditionColor(state.condition), 88, 25);
+    const periodChange = stats.index === null ? null : Number((stats.index - 100).toFixed(2));
+    $("#metricIndexFoot").textContent = state.dateIndex === 0
+      ? "基准日 · 暂无前一交易日"
+      : `日 ${signedPercent(stats.change)} · ${windowLength()}日 ${signedPercent(periodChange)} · 剔除 ±${data.meta.anomalyLimit}% 跳价`;
 
     const up = Number(stats.up || 0);
     const down = Number(stats.down || 0);
@@ -855,6 +976,7 @@
     $("#uniqueSkus").textContent = `/ ${num(scopeStats.rawSkus || scopeStats.skus)}`;
     $("#zeroQuotes").textContent = num(scopeStats.zeroSkus || 0);
     $("#continuousModels").textContent = num(continuousModels());
+    $("#continuousModels").title = `当前分析窗口 ${windowLength()} 个快照均连续有价的机型数`;
     const ringValue = scopeStats.coverage ?? currentQuality().coverage;
     $("#coverageRing").style.background = `conic-gradient(var(--ink) 0 ${ringValue}%, var(--paper-deep) ${ringValue}% 100%)`;
     $("#coverageRingText").textContent = `${fixed(ringValue, 0)}%`;
@@ -873,11 +995,11 @@
     setDirection($("#topChange"), state.dateIndex === 0 ? 0 : stats.change);
     const week = Number(stats.index) - 100;
     const weekElement = $("#topWeek");
-    $("#topWeekLabel").textContent = state.dateIndex === data.dates.length - 1 ? "7日累计" : `${currentDate().short}累计`;
+    $("#topWeekLabel").textContent = `${windowLength()}日累计`;
     weekElement.textContent = state.dateIndex === 0 ? "—" : signedPercent(week);
     weekElement.className = directionClass(week);
     const titleNote = $(".top100-title small");
-    if (titleNote) titleNote.textContent = "固定重点池 · 选池基于近7日靓机连续有价";
+    if (titleNote) titleNote.textContent = "固定重点池 · 选池基于近 7 个完整可用日靓机连续有价";
     const action = $(".top100-action");
     action.innerHTML = state.scope === "top100" ? "当前已聚焦 100 款 <span>↓</span>" : "查看全部 100 款 <span>↗</span>";
     $(".top100-band").classList.toggle("is-current", state.scope === "top100");
@@ -890,7 +1012,7 @@
     $("#briefSummary").textContent = brief.summary;
     const downShare = brief.downShare === null ? "—" : `${fixed(brief.downShare, 1)}%`;
     $("#briefFacts").innerHTML = `
-      <div class="brief-fact"><span>7日累计</span><strong class="${directionClass(brief.weekly)}">${signedPercent(brief.weekly)}</strong><small>截至 ${currentDate().short}</small></div>
+      <div class="brief-fact"><span>${windowLength()}日累计</span><strong class="${directionClass(brief.weekly)}">${signedPercent(brief.weekly)}</strong><small>${windowRangeLabel()}</small></div>
       <div class="brief-fact"><span>下跌面</span><strong>${downShare}</strong><small>${num(brief.stats.down)} / ${num(brief.compared)} 个全内存 SKU</small></div>
       <div class="brief-fact"><span>固定队列</span><strong>${fixed(brief.cohort.selectedIndex, 2)}</strong><small>${num(brief.cohort.sample)} 款${brief.cohort.condition} · 较指数 ${signedIndexPoint(brief.cohort.difference)}</small></div>`;
     $("#briefActions").innerHTML = brief.actions.map((action) => `<li class="brief-action"><span class="brief-level">${action.level}</span><div><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.detail)}</p></div></li>`).join("");
@@ -959,7 +1081,7 @@
       : "当前没有可比较的成色价差样本，等待下一交易日。";
     $("#spreadWarning").classList.toggle("is-clear", spread.noConditionDifferentiation === 0 && (!maxInversion || maxInversion.inversion === 0));
     $("#spreadWarningText").textContent = spread.noConditionDifferentiation
-      ? `${num(spread.noConditionDifferentiation)} 款（占 ${fixed(spread.noDifferentiationShare, 1)}%）的靓机、小花、大花在 7 日窗口内无价格分化；同价记录不参与中位价差和折扣。${maxInversion?.inversion ? `另有 ${num(maxInversion.inversion)} 条「${maxInversion.condition}高于靓机」倒挂，单列但不视作同价。` : ""}`
+      ? `${num(spread.noConditionDifferentiation)} 款（占 ${fixed(spread.noDifferentiationShare, 1)}%）的靓机、小花、大花在 ${windowLength()} 日窗口内无价格分化；同价记录不参与中位价差和折扣。${maxInversion?.inversion ? `另有 ${num(maxInversion.inversion)} 条「${maxInversion.condition}高于靓机」倒挂，单列但不视作同价。` : ""}`
       : "三档成色未发现整体同价；继续关注异价样本与倒挂记录。";
     const maxAbs = Math.max(spread.maxAbsDiscount, 1);
     $("#conditionSpreadList").innerHTML = spread.pairs.map((pair) => {
@@ -982,9 +1104,11 @@
     const container = $("#cohortChart");
     if (!container) return;
     if (!cohort.sample) {
-      container.innerHTML = `<div class="cohort-empty"><strong>没有 7 日连续有价队列</strong><span>当前范围与成色下暂无法形成固定样本。</span></div>`;
+      container.innerHTML = `<div class="cohort-empty"><strong>没有 ${windowLength()} 日连续有价队列</strong><span>当前范围与成色下暂无法形成固定样本，可缩短分析窗口或切换成色。</span></div>`;
       return;
     }
+    const dates = windowDates();
+    const pointCount = cohort.series.length;
     const width = Math.max(280, container.clientWidth || 360);
     const height = 168;
     const margin = { top: 14, right: 10, bottom: 24, left: 34 };
@@ -1001,7 +1125,7 @@
       min -= (max - min) * 0.12;
       max += (max - min) * 0.12;
     }
-    const x = (index) => margin.left + (index / Math.max(1, data.dates.length - 1)) * plotWidth;
+    const x = (index) => margin.left + (index / Math.max(1, pointCount - 1)) * plotWidth;
     const y = (value) => margin.top + ((max - value) / (max - min)) * plotHeight;
     let grid = "";
     for (let index = 0; index <= 3; index += 1) {
@@ -1012,12 +1136,20 @@
     const cohortPath = cohort.series.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
     const marketPath = cohort.marketSeries.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
     const areaPath = `${cohortPath} L${x(cohort.series.length - 1).toFixed(1)},${(margin.top + plotHeight).toFixed(1)} L${x(0).toFixed(1)},${(margin.top + plotHeight).toFixed(1)} Z`;
-    const labels = data.dates.map((date, index) => `<text class="cohort-x-label ${index === state.dateIndex ? "is-selected" : ""}" x="${x(index)}" y="${height - 6}" text-anchor="${index === 0 ? "start" : index === data.dates.length - 1 ? "end" : "middle"}">${formatAxisDate(date.date)}</text>`).join("");
-    const dots = cohort.series.map((value, index) => `<circle class="cohort-dot ${index === state.dateIndex ? "is-selected" : ""}" cx="${x(index).toFixed(1)}" cy="${y(value).toFixed(1)}" r="${index === state.dateIndex ? 3.6 : 2.3}"><title>${longDate(data.dates[index].date)}：${fixed(value, 2)}</title></circle>`).join("");
-    const selectedX = x(state.dateIndex);
+    const labelStep = Math.max(1, Math.floor((pointCount - 1) / 4));
+    const labelIndexes = new Set([0, pointCount - 1]);
+    for (let index = labelStep; index < pointCount - 1; index += labelStep) labelIndexes.add(index);
+    const labels = [...labelIndexes].sort((a, b) => a - b).map((index) => `<text class="cohort-x-label" x="${x(index)}" y="${height - 6}" text-anchor="${index === 0 ? "start" : index === pointCount - 1 ? "end" : "middle"}">${formatAxisDate(dates[index].date)}</text>`).join("");
+    const dotStep = Math.max(1, Math.ceil(pointCount / 24));
+    const dots = cohort.series.map((value, index) => {
+      const isSelected = index === pointCount - 1;
+      if (!isSelected && index % dotStep !== 0) return "";
+      return `<circle class="cohort-dot ${isSelected ? "is-selected" : ""}" cx="${x(index).toFixed(1)}" cy="${y(value).toFixed(1)}" r="${isSelected ? 3.6 : 2.3}"><title>${longDate(dates[index].date)}：${fixed(value, 2)}</title></circle>`;
+    }).join("");
+    const selectedX = x(pointCount - 1);
     const gradientId = `cohort-area-${sparkCounter += 1}`;
     container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" aria-hidden="true" focusable="false"><defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c8ef6a" stop-opacity=".22"/><stop offset="100%" stop-color="#c8ef6a" stop-opacity="0"/></linearGradient></defs>${grid}${labels}<path d="${areaPath}" fill="url(#${gradientId})"/><path d="${marketPath}" class="cohort-market-line"/><path d="${cohortPath}" class="cohort-main-line"/>${dots}<line class="cohort-selected-line" x1="${selectedX}" x2="${selectedX}" y1="${margin.top}" y2="${margin.top + plotHeight}"/></svg>`;
-    container.setAttribute("aria-label", `固定队列${cohort.condition} ${num(cohort.sample)} 款，${currentDate().short}指数 ${fixed(cohort.selectedIndex, 2)}，同成色市场指数 ${fixed(cohort.marketIndex, 2)}`);
+    container.setAttribute("aria-label", `固定队列${cohort.condition} ${num(cohort.sample)} 款，${windowLength()} 日连续有价，${currentDate().short}指数 ${fixed(cohort.selectedIndex, 2)}，同成色市场指数 ${fixed(cohort.marketIndex, 2)}`);
   }
 
   function renderCohort() {
@@ -1033,8 +1165,8 @@
     diff.textContent = signedIndexPoint(cohort.difference);
     diff.className = directionClass(cohort.difference);
     $("#cohortFoot").textContent = state.condition === "全部"
-      ? `当前为全成色筛选，队列默认取靓机口径；${num(cohort.sample)} 款机型 7 日连续有价，队列不随日期洗牌。`
-      : `${num(cohort.sample)} 款机型 7 日连续有价；队列不随日期洗牌，按每日中位涨跌复利计算。`;
+      ? `当前为全成色筛选，队列默认取靓机口径；${num(cohort.sample)} 款机型在 ${windowLength()} 日窗口内连续有价，队列不随日期洗牌。`
+      : `${num(cohort.sample)} 款机型在 ${windowLength()} 日窗口内连续有价；队列不随日期洗牌，按每日中位涨跌复利计算。`;
     $("#cohortLegend").innerHTML = `<span><i class="cohort-key cohort-key-main"></i>固定队列 <b>${fixed(cohort.selectedIndex, 2)}</b></span><span><i class="cohort-key cohort-key-market"></i>${cohort.condition}市场指数 <b>${fixed(cohort.marketIndex, 2)}</b></span>`;
     renderCohortChart(cohort);
   }
@@ -1084,7 +1216,7 @@
         severity: "P1",
         tag: "机型异动",
         title: `${mover.model} ${signedPercent(mover.change)}`,
-        detail: `${mover.brand} · ${mover.mainMemory} · 有效波动 ${Math.abs(mover.change).toFixed(2)}%，覆盖 ${mover.coverageDays}/7 天。`,
+        detail: `${mover.brand} · ${mover.mainMemory} · 有效波动 ${Math.abs(mover.change).toFixed(2)}%，覆盖 ${mover.coverageDays}/${mover.coverageWindow} 个窗口快照。`,
         action: "model",
         actionLabel: "查看报价",
         modelId: mover.id,
@@ -1115,7 +1247,7 @@
         severity: "P1",
         tag: "成色映射",
         title: `复核 ${num(sameTierModels.length)} 款机型的三档成色同价`,
-        detail: `${scopeLabel()} · 靓机/小花/大花完整 7 日序列一致；优先检查成色映射、补价逻辑与源报价，不宜据此判断成色价差。`,
+        detail: `${scopeLabel()} · 靓机/小花/大花在 ${windowLength()} 日窗口内同价；优先检查成色映射、补价逻辑与源报价，不宜据此判断成色价差。`,
         action: "model",
         actionLabel: "查看首款",
         modelId: sameTierModels[0].id,
@@ -1134,6 +1266,20 @@
         tag: "数据缺口",
         title: `补齐 ${num(zeroSkus)} 条无价记录`,
         detail: `${scopeLabel()} · ${currentDate().label} 有价率 ${fixed(coverage, 1)}%，两日匹配 ${fixed(matchedRate, 1)}%。`,
+        action: "quality",
+        actionLabel: "查看体检",
+      });
+    }
+
+    const partialWindow = windowPartialDates();
+    if (partialWindow.length) {
+      const latest = partialWindow.at(-1);
+      tasks.push({
+        id: `partial-window-${currentDate().date}-${state.windowDays}`,
+        severity: "P1",
+        tag: "批次覆盖",
+        title: `当前窗口含 ${num(partialWindow.length)} 个覆盖不足日`,
+        detail: `最近异常批次为 ${latest.label}（${num(latest.quality.rowCount || latest.quality.rows)} 行）；缺失机型不进入涨跌，建议回查源报表导出范围。`,
         action: "quality",
         actionLabel: "查看体检",
       });
@@ -1203,11 +1349,12 @@
     const margin = { top: 22, right: 16, bottom: 29, left: 43 };
     const plotWidth = width - margin.left - margin.right;
     const plotHeight = height - margin.top - margin.bottom;
-    const labels = data.dates.map((item) => item.date);
+    const dates = windowDates();
+    const labels = dates.map((item) => item.date);
     const conditionSeries = data.conditions.map((condition) => ({
       name: condition.name,
       color: condition.color,
-      values: state.scope === "all" ? condition.indexSeries : condition.top100IndexSeries,
+      values: rebaseSeries(state.scope === "all" ? condition.indexSeries : condition.top100IndexSeries),
     }));
     const activeSeries = seriesFor(state.scope, state.condition);
     const values = conditionSeries.flatMap((item) => item.values).concat(activeSeries);
@@ -1226,9 +1373,12 @@
       const value = max - (index / 4) * (max - min);
       gridMarkup += `<line class="chart-grid-line" x1="${margin.left}" x2="${width - margin.right}" y1="${yPosition}" y2="${yPosition}"/><text class="chart-axis-text" x="${margin.left - 10}" y="${yPosition + 3}" text-anchor="end">${value.toFixed(1)}</text>`;
     }
-    const xLabels = labels.map((label, index) => {
+    const labelIndexes = new Set([0, pointCount - 1]);
+    const labelStep = Math.max(1, Math.floor((pointCount - 1) / 5));
+    for (let index = labelStep; index < pointCount - 1; index += labelStep) labelIndexes.add(index);
+    const xLabels = [...labelIndexes].sort((a, b) => a - b).map((index) => {
       const anchor = index === 0 ? "start" : index === pointCount - 1 ? "end" : "middle";
-      return `<text class="chart-x-label ${index === state.dateIndex ? "is-selected" : ""}" x="${x(index)}" y="${height - 8}" text-anchor="${anchor}">${formatAxisDate(label)}</text>`;
+      return `<text class="chart-x-label ${index === pointCount - 1 ? "is-selected" : ""}" x="${x(index)}" y="${height - 8}" text-anchor="${anchor}">${formatAxisDate(labels[index])}</text>`;
     }).join("");
     const lineMarkup = conditionSeries.map((item) => {
       const path = item.values.map((value, index) => `${index ? "L" : "M"}${x(index).toFixed(2)},${y(value).toFixed(2)}`).join(" ");
@@ -1236,8 +1386,8 @@
       const isMuted = state.condition !== "全部" && !isFocused;
       return `<g class="chart-series" data-series="${escapeHtml(item.name)}"><path class="chart-line ${isFocused ? "is-focused" : ""} ${isMuted ? "is-muted" : ""}" d="${path}" stroke="${item.color}"/><circle class="chart-end-dot" cx="${x(pointCount - 1)}" cy="${y(item.values.at(-1))}" r="2.7" fill="${item.color}"/></g>`;
     }).join("");
-    const selectedX = x(state.dateIndex);
-    const selectedValue = activeSeries[state.dateIndex];
+    const selectedX = x(pointCount - 1);
+    const selectedValue = activeSeries.at(-1);
     const selectedMarkup = `<line class="chart-selected-line" x1="${selectedX}" x2="${selectedX}" y1="${margin.top}" y2="${margin.top + plotHeight}"/><circle class="chart-selected-dot" cx="${selectedX}" cy="${y(selectedValue)}" r="4" fill="${state.condition === "全部" ? "#171a16" : conditionColor(state.condition)}"/><g transform="translate(${clamp(selectedX, margin.left + 34, width - margin.right - 34)},${margin.top + 8})"><rect class="chart-selected-label-bg" x="-26" y="-8" width="52" height="16"/><text class="chart-selected-label" x="0" y="2" text-anchor="middle">${currentDate().short}</text></g>`;
 
     container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(scopeLabel())}${escapeHtml(conditionLabel())}价格指数趋势图">${gridMarkup}${xLabels}${lineMarkup}${selectedMarkup}<g class="chart-cursor" visibility="hidden"><line class="chart-cursor-line" y1="${margin.top}" y2="${margin.top + plotHeight}"/><g class="chart-cursor-dots"></g></g><rect class="chart-hover-area" x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}" fill="transparent"/></svg><div class="chart-tooltip" hidden></div>`;
@@ -1259,7 +1409,7 @@
       cursorLine.setAttribute("x2", cursorX);
       cursorDots.innerHTML = conditionSeries.map((item) => `<circle class="chart-cursor-dot" cx="${cursorX}" cy="${y(item.values[index])}" r="3" fill="${item.color}"/>`).join("");
       tooltip.hidden = false;
-      tooltip.innerHTML = `<div class="tooltip-date">${longDate(labels[index])} · ${data.dates[index].weekday}</div>${conditionSeries.map((item) => `<div class="tooltip-row"><span><i style="background:${item.color}"></i>${escapeHtml(item.name)}</span><strong>${item.values[index].toFixed(2)}</strong></div>`).join("")}`;
+      tooltip.innerHTML = `<div class="tooltip-date">${longDate(labels[index])} · ${dates[index].weekday}</div>${conditionSeries.map((item) => `<div class="tooltip-row"><span><i style="background:${item.color}"></i>${escapeHtml(item.name)}</span><strong>${item.values[index].toFixed(2)}</strong></div>`).join("")}`;
       const approximateY = y(Math.max(...conditionSeries.map((item) => item.values[index])));
       tooltip.style.left = `${leftPadding + cursorX}px`;
       tooltip.style.top = `${Math.max(38, approximateY)}px`;
@@ -1272,11 +1422,11 @@
     });
 
     const stats = conditionStatsFor(state.scope, state.condition);
-    $("#chartTitle").textContent = `${scopeLabel()}${state.condition === "全部" ? "市场指数" : ` · ${state.condition}指数`} · 近7日`;
+    $("#chartTitle").textContent = `${scopeLabel()}${state.condition === "全部" ? "市场指数" : ` · ${state.condition}指数`} · 近${windowLength()}日`;
     $("#chartSummaryLabel").textContent = `${scopeLabel()} · ${conditionLabel()} · ${currentDate().short}`;
     $("#chartSummaryValue").textContent = fixed(stats.index, 2);
     setDirection($("#chartSummaryDelta"), state.dateIndex === 0 ? 0 : stats.change);
-    $(".base-date").textContent = `BASE ${longDate(data.meta.dateFrom)} = 100`;
+    $(".base-date").textContent = `BASE ${longDate(dates[0].date)} = 100`;
     if (state.dateIndex === 0) {
       $("#chartSummaryNote").textContent = "基准日：五类成色指数统一归一到 100，暂无前一交易日涨跌。";
     } else if (state.condition !== "全部") {
@@ -1404,8 +1554,10 @@
       $("#modelRows").innerHTML = visible.map((row, index) => {
         const status = statusForRow(row);
         const rank = state.scope === "top100" && state.sort === "rank" ? row.top100Rank : index + 1;
-        const bars = data.dates.map((date, dayIndex) => `<b class="${row.history[dayIndex] !== null ? "is-on" : ""}"></b>`).join("");
-        return `<tr data-model-id="${row.id}" tabindex="0" aria-label="查看 ${escapeHtml(row.model)} ${escapeHtml(row.condition)} 详情"><td><span class="rank-cell ${state.scope === "top100" ? "is-top" : ""}">${rank ? String(rank).padStart(2, "0") : "—"}</span></td><td><div class="model-cell"><span class="model-badge">${row.brandShort}</span><div><strong>${escapeHtml(row.model)}</strong><small>MODEL ID · ${escapeHtml(row.modelId)}</small><span class="mobile-model-meta">${escapeHtml(row.brand)} · ${escapeHtml(row.mainMemory)} · ${escapeHtml(row.condition)}</span></div></div></td><td><span class="brand-text">${escapeHtml(row.brand)}</span></td><td><span class="memory-pill">${escapeHtml(row.mainMemory)}</span></td><td><span class="condition-badge"><i style="background:${conditionColor(row.condition)}"></i>${escapeHtml(row.condition)}</span></td><td class="align-right"><span class="price-value">¥${num(row.price)}</span></td><td class="align-right"><div class="delta-cell"><span class="delta-main ${directionClass(row.change)}">${signedPercent(row.change)}</span><span class="delta-sub">${signedMoney(row.changeAmount)}</span></div></td><td class="align-right hide-tablet"><span class="${directionClass(row.windowChange)}">${signedPercent(row.windowChange)}</span></td><td class="spark-col hide-tablet"><div class="spark-cell">${sparkline(row.history.slice(0, state.dateIndex + 1), conditionColor(row.condition), 75, 24)}</div></td><td class="align-center hide-tablet"><span class="coverage-cell" title="${row.coverageDays}/7 天有价"><i>${bars}</i>${row.coverageDays}/7</span></td><td class="align-right hide-tablet"><span class="status-badge ${status.className}">${status.text}</span></td><td class="chevron-col"><span class="row-chevron"><svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></span></td></tr>`;
+        const start = windowStartIndex();
+        const bars = coverageBars(row.history, start, state.dateIndex);
+        const windowValues = row.history.slice(start, state.dateIndex + 1);
+        return `<tr data-model-id="${row.id}" tabindex="0" aria-label="查看 ${escapeHtml(row.model)} ${escapeHtml(row.condition)} 详情"><td><span class="rank-cell ${state.scope === "top100" ? "is-top" : ""}">${rank ? String(rank).padStart(2, "0") : "—"}</span></td><td><div class="model-cell"><span class="model-badge">${row.brandShort}</span><div><strong>${escapeHtml(row.model)}</strong><small>MODEL ID · ${escapeHtml(row.modelId)}</small><span class="mobile-model-meta">${escapeHtml(row.brand)} · ${escapeHtml(row.mainMemory)} · ${escapeHtml(row.condition)}</span></div></div></td><td><span class="brand-text">${escapeHtml(row.brand)}</span></td><td><span class="memory-pill">${escapeHtml(row.mainMemory)}</span></td><td><span class="condition-badge"><i style="background:${conditionColor(row.condition)}"></i>${escapeHtml(row.condition)}</span></td><td class="align-right"><span class="price-value">¥${num(row.price)}</span></td><td class="align-right"><div class="delta-cell"><span class="delta-main ${directionClass(row.change)}">${signedPercent(row.change)}</span><span class="delta-sub">${signedMoney(row.changeAmount)}</span></div></td><td class="align-right hide-tablet"><span class="${directionClass(row.windowChange)}">${signedPercent(row.windowChange)}</span></td><td class="spark-col hide-tablet"><div class="spark-cell">${sparkline(windowValues, conditionColor(row.condition), 75, 24)}</div></td><td class="align-center hide-tablet"><span class="coverage-cell" title="${row.coverageDays}/${windowLength()} 个窗口快照有价"><i>${bars}</i>${row.coverageDays}/${windowLength()}</span></td><td class="align-right hide-tablet"><span class="status-badge ${status.className}">${status.text}</span></td><td class="chevron-col"><span class="row-chevron"><svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></span></td></tr>`;
       }).join("");
       loadMore.hidden = rows.length <= state.visibleCount;
       $("#resultCount").textContent = `显示 1–${visible.length} / ${rows.length} 款${state.scope === "top100" ? "重点机型" : "全量机型"}`;
@@ -1414,7 +1566,7 @@
     const isTop100 = state.scope === "top100";
     $("#modelPanelKicker").textContent = `MODEL WATCH / ${isTop100 ? "TOP100 重点池" : `${data.meta.totalModels} 款全量`}`;
     $("#modelPanelTitle").textContent = isTop100 ? "TOP100 机型涨跌榜" : "全量机型涨跌榜";
-    $("#modelPanelNote").textContent = `${currentDate().label} · ${conditionLabel()} · ${isTop100 ? "固定重点池" : "覆盖全量在榜机型"} · ${SORT_LABELS[state.sort]}；点击行查看 7 日走势。`;
+    $("#modelPanelNote").textContent = `${currentDate().label} · ${conditionLabel()} · ${isTop100 ? "固定重点池" : "覆盖全量在榜机型"} · ${SORT_LABELS[state.sort]}；点击行查看 ${windowLength()} 日走势。`;
     $("#outlierBadge").innerHTML = `<i></i> ${num(statsFor(state.scope).anomalies)} 条异常价隔离`;
     const hasFilter = state.brand !== "all" || state.condition !== "全部" || state.query.trim() !== "";
     $("#clearFilters").hidden = !hasFilter;
@@ -1422,15 +1574,33 @@
 
   function renderQuality() {
     const quality = currentQuality();
-    const totalMissing = data.dates.reduce((total, item) => total + item.quality.missingMemory, 0);
-    const allStats = statsFor("all");
-    $("#qualitySummary").textContent = `${currentDate().label}批次 ${num(quality.rows)} 条记录；${num(quality.zeroQuotes)} 条零价、${num(quality.missingMemory)} 条内存缺失单独隔离。`;
-    $("#qualityTotalSkus").textContent = num(data.meta.totalSkus);
+    const dates = windowDates();
+    const start = windowStartIndex();
+    const completeDays = dates.filter((item) => item.quality.status === "complete").length;
+    const partialDays = dates.length - completeDays;
+    const windowValid = windowValidSkus();
+    const anomalies = data.market.all.stats
+      .slice(start, state.dateIndex + 1)
+      .reduce((total, item) => total + Number(item.anomalies || 0), 0);
+    const qualityLabel = quality.status === "complete" ? "完整覆盖" : quality.status === "warning" ? "覆盖偏低" : "部分覆盖";
+    $("#qualityHeadline").textContent = `${windowLength()} 个自然日窗口，${completeDays} 日完整覆盖；缺失不当作降价。`;
+    $("#qualitySummary").textContent = `${currentDate().label}批次 ${num(quality.rows)} 条记录，${qualityLabel}；${num(quality.zeroQuotes)} 条零价单独隔离。${quality.note ? ` ${quality.note}。` : ""}`;
+    $("#qualityTotalLabel").textContent = `${windowLength()}日有效记录`;
+    $("#qualityTotalSkus").textContent = num(windowValid);
+    $("#qualityTotalDays").textContent = dates.length;
     $("#qualityMatchRate").textContent = `${fixed(quality.matchedRate, 1)}%`;
     $("#qualityMatchCount").textContent = `${num(quality.matched)} 条可比`;
-    $("#qualityMissingMemory").textContent = num(totalMissing);
-    $("#qualityAnomalies").textContent = num(allStats.anomalies);
-    $("#qualityTimeline").innerHTML = data.dates.map((date, index) => `<button class="quality-day ${index === state.dateIndex ? "is-selected" : ""}" type="button" data-quality-date="${index}" title="查看 ${date.label} 数据"><div class="quality-day-head"><span>${date.short} · ${date.weekday}</span><strong>${num(date.quality.validKeys)}</strong></div><div class="quality-day-bar"><span style="width:${date.quality.coverage}%"></span></div></button>`).join("");
+    $("#qualityPartialDays").textContent = num(partialDays);
+    $("#qualityAnomalyLabel").textContent = `${windowLength()}日异常跳价`;
+    $("#qualityAnomalies").textContent = num(anomalies);
+    const timeline = $("#qualityTimeline");
+    timeline.setAttribute("aria-label", `${windowLength()} 日有效报价与批次覆盖趋势`);
+    timeline.innerHTML = dates.map((date, offset) => {
+      const index = start + offset;
+      const statusClass = date.quality.status === "complete" ? "" : "is-partial";
+      const statusLabel = date.quality.status === "complete" ? "完整" : date.quality.status === "warning" ? "偏低" : "部分";
+      return `<button class="quality-day ${statusClass} ${index === state.dateIndex ? "is-selected" : ""}" type="button" data-quality-date="${index}" title="${date.label}：${num(date.quality.rowCount || date.quality.rows)} 行，${statusLabel}，有价 ${num(date.quality.validKeys)} 条"><div class="quality-day-head"><span>${date.short} · ${date.weekday}</span><strong>${num(date.quality.validKeys)}</strong></div><div class="quality-day-bar"><span style="width:${date.quality.coverage}%"></span></div></button>`;
+    }).join("");
   }
 
   function syncControls() {
@@ -1448,6 +1618,22 @@
     $("#brandFilter").value = state.brand;
     $("#sortFilter").value = state.sort;
     $("#clearFilters").hidden = !(state.brand !== "all" || state.condition !== "全部" || state.query.trim() !== "");
+    syncWindowControls();
+  }
+
+  function syncWindowControls() {
+    const available = analysisWindows();
+    $$(".window-switch [data-window]").forEach((button) => {
+      const days = Number(button.dataset.window);
+      const enabled = available.includes(days);
+      const active = enabled && state.windowDays === days;
+      button.disabled = !enabled;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+      button.title = enabled
+        ? `按 ${days} 个自然日重新计算当前指标`
+        : `当前仅入库 ${storedDays()} 天，累计到 ${days} 天后自动启用（最多支持 ${maxWindowDays()} 天）`;
+    });
   }
 
   function renderAll() {
@@ -1477,6 +1663,18 @@
     state.dateIndex = clamp(Number(index), 0, data.dates.length - 1);
     state.visibleCount = defaultVisibleCount();
     renderAll();
+  }
+
+  function setWindowDays(days) {
+    const available = analysisWindows();
+    if (!available.includes(days)) {
+      showToast(`当前已入库 ${storedDays()} 天，暂不能切换到 ${days} 天窗口`);
+      return;
+    }
+    state.windowDays = days;
+    state.visibleCount = defaultVisibleCount();
+    renderAll();
+    showToast(`分析窗口已切换为 ${days} 天`);
   }
 
   function setScope(scope) {
@@ -1592,17 +1790,25 @@
     $("#drawerMemoryOptions").innerHTML = memories.map((item) => `<button type="button" data-drawer-memory="${escapeHtml(item)}" class="${item === memory ? "is-active" : ""}" aria-pressed="${item === memory}"><span>${escapeHtml(item)}</span>${item === model.mainMemory ? "<small>主配置</small>" : ""}</button>`).join("");
     $("#drawerConditionTabs").innerHTML = CONDITIONS.map((item) => `<button type="button" data-drawer-condition="${item}" class="${item === condition ? "is-active" : ""}" aria-pressed="${item === condition}" ${configPriceAt(model, memory, item, state.dateIndex) === null ? "disabled" : ""}>${item}</button>`).join("");
 
-    const stats = quoteStats(history, state.dateIndex);
+    const stats = quoteStats(history, state.dateIndex, 30);
     $("#quoteReferenceTitle").textContent = `${model.model} · ${memory} · ${condition}`;
     $("#drawerQuoteMedian").textContent = stats.median === null ? "—" : `¥${num(Math.round(stats.median))}`;
     $("#drawerQuoteRange").textContent = stats.low === null ? "—" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`;
-    $("#drawerQuoteSample").textContent = `${stats.sample}/7 天`;
+    $("#drawerQuoteSample").textContent = `${stats.sample}/${stats.availableDays} 天`;
     $("#drawerQuoteDate").textContent = longDate(currentDate().date);
     $("#quoteConfigModeNote").textContent = configMode;
-    const position = price && stats.min !== null && stats.max !== null ? (stats.max === stats.min ? "当前价位于窗口高位" : price <= stats.low ? "当前价低于近7日P25" : price >= stats.high ? "当前价高于近7日P75" : "当前价位于近7日区间内") : "暂无可比窗口";
+    const position = price && stats.min !== null && stats.max !== null
+      ? stats.max === stats.min
+        ? "当前价位于近 30 日高位"
+        : price <= stats.low
+          ? "当前价低于近 30 日 P25"
+          : price >= stats.high
+            ? "当前价高于近 30 日 P75"
+            : "当前价位于近 30 日区间内"
+      : "暂无可比窗口";
     const volatility = stats.min !== null && stats.max !== null && stats.median ? ((stats.max - stats.min) / stats.median) * 100 : null;
     $("#drawerQuotePosition").textContent = position;
-    $("#drawerQuoteVolatility").textContent = volatility === null ? "波动区间不足" : `近7日振幅 ${fixed(volatility, 1)}%`;
+    $("#drawerQuoteVolatility").textContent = volatility === null ? "波动区间不足" : `近 30 日振幅 ${fixed(volatility, 1)}%`;
     const quoteReference = $("#quoteReference");
     let qualityWarning = $("#drawerQualityWarning", quoteReference);
     if (!qualityWarning) {
@@ -1628,12 +1834,16 @@
 
     renderSkuMatrix(model, memory, condition);
     const visibleHistory = history.map((value, index) => (index <= state.dateIndex ? value : null));
-    const firstPrice = visibleHistory.find((value) => value !== null);
+    const windowHistory = history.slice(windowStartIndex(), state.dateIndex + 1);
+    const firstPrice = windowHistory.find((value) => value !== null);
     const windowChange = firstPrice && price ? percentChange(price, firstPrice) : state.dateIndex === 0 ? 0 : null;
     $("#drawer7d").textContent = signedPercent(windowChange);
     $("#drawer7d").className = directionClass(windowChange);
-    const coverageDays = history.filter((value) => value !== null).length;
-    $("#drawerCoverage").textContent = `${coverageDays}/7 天`;
+    const firstIndex = windowHistory.findIndex((value) => value !== null);
+    const coverageDays = windowHistory.filter((value) => value !== null).length;
+    const comparedDays = windowChange === null ? 0 : state.dateIndex - (windowStartIndex() + firstIndex) + 1;
+    $("#drawerCoverage").textContent = `${coverageDays}/${windowLength()} 天`;
+    $(".drawer-meta-grid > div:first-child span").textContent = comparedDays ? `${comparedDays} 日累计` : "窗口累计";
     $("#drawerRank").textContent = model.inTop100 ? `TOP ${model.top100Rank}` : "全量";
     drawDrawerChart(visibleHistory, conditionColor(condition), state.dateIndex);
   }
@@ -1684,14 +1894,14 @@
 
   async function copyBriefing() {
     const brief = briefingData();
-    await copyText(brief.copyText, "7日行情简报已复制");
+    await copyText(brief.copyText, `${windowLength()}日行情简报已复制`);
   }
 
   async function copyQuoteSummary() {
     const selection = drawerSelection();
     if (!selection) return;
     const { model, memory, condition, price, stats } = selection;
-    const summary = `${model.model} ${memory} ${condition}｜参考价 ${price ? `¥${num(price)}` : "暂无"}｜7日中位 ${stats.median === null ? "暂无" : `¥${num(Math.round(stats.median))}`}｜P25–P75 ${stats.low === null ? "暂无" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`}｜数据截至 ${currentDate().date}｜行情参考，非成交价`;
+    const summary = `${model.model} ${memory} ${condition}｜参考价 ${price ? `¥${num(price)}` : "暂无"}｜近30日中位 ${stats.median === null ? "暂无" : `¥${num(Math.round(stats.median))}`}｜P25–P75 ${stats.low === null ? "暂无" : `¥${num(Math.round(stats.low))}–¥${num(Math.round(stats.high))}`}｜数据截至 ${currentDate().date}｜行情参考，非成交价`;
     await copyText(summary, "报价摘要已复制");
   }
 
@@ -1740,20 +1950,10 @@
       const value = max - (index / 3) * (max - min);
       grid += `<line class="chart-grid-line" x1="${margin.left}" x2="${width - margin.right}" y1="${yPosition}" y2="${yPosition}"/><text class="chart-axis-text" x="${margin.left - 8}" y="${yPosition + 3}" text-anchor="end">${Math.round(value)}</text>`;
     }
-    let path = "";
-    let drawing = false;
-    values.forEach((value, index) => {
-      if (value === null) {
-        drawing = false;
-        return;
-      }
-      path += `${drawing ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)} `;
-      drawing = true;
-    });
     const dots = valid.map((item) => `<circle cx="${x(item.index).toFixed(1)}" cy="${y(item.value).toFixed(1)}" r="2.4" fill="${color}" stroke="var(--card)" stroke-width="1.5"/>`).join("");
     const selectedX = x(selectedIndex);
     const gradientId = `drawer-area-${sparkCounter += 1}`;
-    container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="所选日期前的价格走势"><defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".15"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<line class="chart-selected-line" x1="${selectedX}" x2="${selectedX}" y1="${margin.top}" y2="${margin.top + plotHeight}"/><path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${dots}<text class="chart-x-label" x="${margin.left}" y="${height - 6}" text-anchor="start">${data.dates[0].short}</text><text class="chart-x-label" x="${width - margin.right}" y="${height - 6}" text-anchor="end">${data.dates[selectedIndex].short}</text></svg>`;
+    container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="所选日期前的有价记录散点，缺失日不连线"><defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".15"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<line class="chart-selected-line" x1="${selectedX}" x2="${selectedX}" y1="${margin.top}" y2="${margin.top + plotHeight}"/>${dots}<text class="chart-x-label" x="${margin.left}" y="${height - 6}" text-anchor="start">${data.dates[0].short}</text><text class="chart-x-label" x="${width - margin.right}" y="${height - 6}" text-anchor="end">${data.dates[selectedIndex].short}</text></svg>`;
   }
 
   function csvCell(value) {
@@ -1794,7 +1994,12 @@
   }
 
   function setActiveNavigation(sectionId) {
-    $$(".side-link, .mobile-nav button").forEach((button) => button.classList.toggle("is-active", button.dataset.scroll === sectionId));
+    $$(".side-link, .mobile-nav button").forEach((button) => {
+      const active = button.dataset.scroll === sectionId;
+      button.classList.toggle("is-active", active);
+      if (active) button.setAttribute("aria-current", "true");
+      else button.removeAttribute("aria-current");
+    });
   }
 
   function scrollToSection(sectionId) {
@@ -1805,6 +2010,20 @@
   }
 
   function bindEvents() {
+    const sectionIds = ["overview", "brands", "models", "ops", "quality"];
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+      if (visible) setActiveNavigation(visible.target.id);
+    }, { rootMargin: "-18% 0px -58% 0px", threshold: [0, 0.15, 0.4, 0.75] });
+    sectionIds.forEach((id) => {
+      const section = document.getElementById(id);
+      if (section) observer.observe(section);
+    });
+    const initialSection = sectionIds.find((id) => document.getElementById(id));
+    if (initialSection) setActiveNavigation(initialSection);
+
     document.addEventListener("click", (event) => {
       const opsDone = event.target.closest("[data-ops-done]");
       if (opsDone) {
@@ -1823,6 +2042,11 @@
       const scopeButton = event.target.closest("[data-scope]");
       if (scopeButton) {
         setScope(scopeButton.dataset.scope);
+        return;
+      }
+      const windowButton = event.target.closest("[data-window]");
+      if (windowButton) {
+        if (!windowButton.disabled) setWindowDays(Number(windowButton.dataset.window));
         return;
       }
       if (event.target.closest("[data-scope-select]")) {
@@ -1977,15 +2201,6 @@
       target.click();
     });
 
-    const sections = ["overview", "brands", "models", "ops", "quality"];
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      if (visible) setActiveNavigation(visible.target.id);
-    }, { rootMargin: "-20% 0px -55% 0px", threshold: [0.05, 0.3, 0.6] });
-    sections.forEach((sectionId) => {
-      const section = document.getElementById(sectionId);
-      if (section) observer.observe(section);
-    });
     let resizeFrame = null;
     window.addEventListener("resize", () => {
       if (resizeFrame) cancelAnimationFrame(resizeFrame);

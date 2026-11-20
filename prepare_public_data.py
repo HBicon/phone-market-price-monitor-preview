@@ -66,13 +66,14 @@ def transform_payload(payload):
         model["earliestPrice"] = earliest or None
 
     payload["top100Ids"] = [model["id"] for model in models if model.get("inTop100")]
+    day_count = len(payload.get("dates", []))
     payload["meta"]["source"] = "脱敏演示报价"
     payload["meta"]["demo"] = True
-    payload["meta"]["note"] = "基于真实 7 日报价结构脱敏生成；价格绝对值已做不可逆比例变换，保留日涨跌结构与异常隔离逻辑，仅用于 UI 评审。"
+    payload["meta"]["note"] = f"基于真实 {day_count} 日报价结构脱敏生成；价格绝对值已做不可逆比例变换，保留日涨跌结构与异常隔离逻辑，仅用于 UI 评审。"
     payload["meta"]["publicDemo"] = True
     payload["meta"].setdefault("targetModels", 1000)
     payload["meta"].setdefault("configDataMode", "actual")
-    payload["meta"].setdefault("configNote", "机型详情按真实内存配置展示 7 日行情与成色矩阵。")
+    payload["meta"]["configNote"] = f"机型详情按真实内存配置展示 {day_count} 日行情与成色矩阵。"
     return payload
 
 

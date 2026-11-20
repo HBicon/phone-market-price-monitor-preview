@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="手机市场行情监控：按日追踪 891 个机型与 TOP100 重点机型的报价变化。" />
+    <meta name="description" content="手机市场行情监控：按日追踪 891 个机型、90 天价格变化与 TOP100 重点机型报价。" />
     <meta name="theme-color" content="#171a16" />
     <title>价脉 Price Pulse · 手机市场行情监控</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23a8c72d'/%3E%3Cpath d='M16 44 28 30l8 7 13-19' fill='none' stroke='%23151c17' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="styles.css?v=20261116a" />
-    <script src="assets/data.js?v=20261105c" defer></script>
-    <script src="app.js?v=20261105c" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20261120b" />
+    <script src="assets/data.js?v=20261120b" defer></script>
+    <script src="app.js?v=20261120b" defer></script>
   </head>
   <body>
     <div class="page-grain" aria-hidden="true"></div>
@@ -47,13 +47,13 @@
       <div class="sidebar-foot">
         <div class="live-block">
           <div class="live-heading"><span class="live-dot"></span> 最新批次已入库</div>
-          <div class="live-score"><strong id="sideValidSkus">9,765</strong><span>有效报价</span></div>
+          <div class="live-score"><strong id="sideValidSkus">12,284</strong><span>有效报价</span></div>
           <div class="live-meter"><span id="sideCoverageBar"></span></div>
-          <div class="live-caption"><span>最新日报价覆盖</span><span id="sideCoverage">75.0%</span></div>
+          <div class="live-caption"><span>最新日报价覆盖</span><span id="sideCoverage">94.3%</span></div>
         </div>
         <div class="demo-note">
-          <span class="demo-stamp">7D</span>
-          <p id="sideDateRange">10.27–11.02 · 7 个自然日报价快照。</p>
+          <span class="demo-stamp" id="sideWindowStamp">90D</span>
+          <p id="sideDateRange">08.23–11.20 · 已入库 91 个自然日报价快照。</p>
         </div>
         <div class="operator">
           <span class="operator-avatar">HZ</span>
@@ -97,21 +97,22 @@
       <main class="main-content">
         <section class="hero hero-compact" id="overview">
           <div class="hero-copy">
-            <div class="eyebrow"><span>DAILY PRICE MONITORING</span><i></i><span>7-DAY VIEW</span></div>
+            <div class="eyebrow"><span>DAILY PRICE MONITORING</span><i></i><span id="heroWindowFlag">90-DAY VIEW</span></div>
             <h1>价格在动，<em>先看重点。</em></h1>
-            <p><strong id="heroModelCount">891</strong> 个在榜机型 · 近 7 日 <strong id="heroTotalSkus">65,040</strong> 条有效报价；全量行情与 TOP100 重点池分开观察。 <span class="demo-inline" id="demoInline">公网演示 · 价格已脱敏</span></p>
+            <p><strong id="heroModelCount">891</strong> 个在榜机型 · <span id="heroWindowLabel">近 90 日</span> <strong id="heroTotalSkus">665,174</strong> 条有效报价；全量行情与 TOP100 重点池分开观察。 <span class="demo-inline" id="demoInline">公网演示 · 价格已脱敏</span></p>
           </div>
           <div class="hero-aside">
             <div class="brief-status">
               <span class="brief-label">DATA WINDOW</span>
-              <div class="brief-line"><span class="live-dot"></span><strong id="heroDateStatus">11月2日行情已更新</strong></div>
-              <span class="brief-time" id="heroDateRange">2026.10.27–11.02 / 18:06 CST</span>
+              <div class="brief-line"><span class="live-dot"></span><strong id="heroDateStatus">11月19日行情已更新</strong></div>
+              <span class="brief-time" id="heroDateRange">2026.08.22–11.19 / 90 个快照</span>
+              <span class="brief-time brief-schedule">每日 05:00 自动更新 · 拉取前一日已结算报价</span>
             </div>
             <div class="hero-rule"></div>
             <div class="hero-stat">
               <span>最新有效报价</span>
-              <strong id="heroValidSkus">9,765</strong>
-              <small><b id="heroCoverage">75.0%</b> 有价率</small>
+              <strong id="heroValidSkus">12,284</strong>
+              <small><b id="heroCoverage">94.3%</b> 有价率</small>
             </div>
           </div>
         </section>
@@ -133,8 +134,15 @@
               <button class="condition-pill" type="button" data-condition="内爆"><i class="dot dot-inside"></i>内爆</button>
             </div>
           </div>
-          <div class="period-chip"><span>数据窗口</span><strong>10.27–11.02</strong><em>7D</em></div>
+          <div class="window-switch" role="group" aria-label="分析窗口">
+            <span>分析窗口</span>
+            <button type="button" data-window="7">7D</button>
+            <button type="button" data-window="30">30D</button>
+            <button type="button" data-window="90" class="is-active">90D</button>
+            <button type="button" data-window="180" disabled title="当前已入库 90 天，扩展到 180 天后自动启用">180D</button>
+          </div>
         </section>
+        <p class="partial-notice" id="partialNotice" hidden role="note"></p>
 
         <section class="metric-grid" aria-label="核心指标">
           <article class="metric-card metric-primary">
@@ -156,14 +164,14 @@
           <article class="metric-card">
             <div class="metric-topline"><span id="coverageLabel">最新报价覆盖</span><span class="metric-code">COVERAGE · 04</span></div>
             <div class="coverage-row">
-              <div><div class="metric-value-row"><strong class="metric-value" id="validSkus">9,765</strong><span class="unit" id="uniqueSkus">/ 13,020</span></div><div class="metric-foot"><span>零价 <b id="zeroQuotes">3,255</b></span><span>7日连续覆盖 <b id="continuousModels">494</b></span></div></div>
+              <div><div class="metric-value-row"><strong class="metric-value" id="validSkus">9,765</strong><span class="unit" id="uniqueSkus">/ 13,020</span></div><div class="metric-foot"><span>零价 <b id="zeroQuotes">3,255</b></span><span>窗口连续覆盖 <b id="continuousModels">494</b></span></div></div>
               <div class="small-ring" id="coverageRing"><span id="coverageRingText">75%</span></div>
             </div>
           </article>
         </section>
 
         <section class="top100-band" aria-label="TOP100 重点池摘要">
-          <div class="top100-title"><span class="top100-mark">TOP<br />100</span><div><strong>重点机型池</strong><small>近 7 日靓机连续有价，按最新市场价排序</small></div></div>
+          <div class="top100-title"><span class="top100-mark">TOP<br />100</span><div><strong>重点机型池</strong><small>近 7 个完整可用日靓机连续有价，按最新市场价排序</small></div></div>
           <div class="top100-stat"><span>上涨</span><strong class="up-text" id="topUp">46</strong></div>
           <div class="top100-stat"><span>下跌</span><strong class="down-text" id="topDown">13</strong></div>
           <div class="top100-stat"><span id="topFlatLabel">持平</span><strong id="topFlat">41</strong></div>
@@ -174,8 +182,8 @@
 
         <section class="brief-band" aria-labelledby="briefTitle">
           <div class="brief-lead">
-            <div class="brief-eyebrow"><span class="brief-flag">7D</span><span>MARKET BRIEF / 行情简报</span><em id="briefScope">全量 · 全成色 · 11.02</em></div>
-            <h2 id="briefTitle">全量日线走强，7日价格仍在修复</h2>
+            <div class="brief-eyebrow"><span class="brief-flag" id="briefWindowFlag">90D</span><span>MARKET BRIEF / 行情简报</span><em id="briefScope">全量 · 全成色 · 11.20</em></div>
+            <h2 id="briefTitle">近 90 日价格持续下探，先看下跌面与异常</h2>
             <p class="brief-summary" id="briefSummary">正在生成当前筛选口径的市场摘要。</p>
             <div class="brief-facts" id="briefFacts"></div>
           </div>
@@ -197,8 +205,8 @@
 
         <section class="dashboard-grid top-grid">
           <article class="panel chart-panel">
-            <header class="panel-header"><div><div class="panel-kicker">PRICE MOVEMENT / 价格走势</div><h2 id="chartTitle">全量市场指数 · 近7日</h2></div><div class="panel-header-meta"><span class="base-date">BASE 2026.10.27 = 100</span><button class="more-button" type="button" data-method-open aria-label="查看指标说明">?</button></div></header>
-            <div class="chart-summary"><div><span id="chartSummaryLabel">全市场 · 7天</span><strong id="chartSummaryValue">99.02</strong><small id="chartSummaryDelta" class="up-text">+2.54%</small></div><div class="chart-summary-note" id="chartSummaryNote">日报价中位数指数；异常跳价不参与计算。</div></div>
+            <header class="panel-header"><div><div class="panel-kicker">PRICE MOVEMENT / 价格走势</div><h2 id="chartTitle">全量市场指数 · 近90日</h2></div><div class="panel-header-meta"><span class="base-date">BASE 2026.08.22 = 100</span><button class="more-button" type="button" data-method-open aria-label="查看指标说明">?</button></div></header>
+            <div class="chart-summary"><div><span id="chartSummaryLabel">全市场 · 90天</span><strong id="chartSummaryValue">61.71</strong><small id="chartSummaryDelta" class="up-text">+0.28%</small></div><div class="chart-summary-note" id="chartSummaryNote">日报价中位数指数；异常跳价不参与计算。</div></div>
             <div class="line-chart" id="marketChart" role="img" aria-label="成色价格指数折线图"></div>
             <div class="chart-legend" id="chartLegend"></div>
           </article>
@@ -248,7 +256,7 @@
               <p class="panel-note" id="spreadSubtitle">同日、同机型、同主内存，以靓机为基准比较四组成色价差。</p>
             </div>
             <div class="spread-header-meta">
-              <span id="spreadScope">全量 · 主配置 · 11.02</span>
+              <span id="spreadScope">全量 · 主配置 · 11.19</span>
               <button class="spread-method-button" type="button" data-method-open>指标字典 <span>↗</span></button>
             </div>
           </header>
@@ -257,7 +265,7 @@
               <div class="spread-kpis">
                 <div><span>最深折价</span><strong id="spreadDeepestValue">—</strong><small id="spreadDeepestLabel">—</small></div>
                 <div><span>最大倒挂</span><strong id="spreadInversionValue">—</strong><small id="spreadInversionLabel">—</small></div>
-                <div><span>7 日序列一致</span><strong id="spreadSameValue">—</strong><small id="spreadSameLabel">—</small></div>
+                <div><span>窗口序列一致</span><strong id="spreadSameValue">—</strong><small id="spreadSameLabel">—</small></div>
               </div>
               <p class="spread-summary" id="spreadSummary">正在计算成色价差结构。</p>
               <div class="spread-warning" id="spreadWarning">
@@ -311,13 +319,13 @@
         </section>
 
         <section class="quality-strip" id="quality">
-          <div class="quality-title"><div class="panel-kicker">DATA HEALTH / 数据体检</div><h2>7 天报价可用，异常不混入趋势。</h2><p id="qualitySummary">最新批次 13,020 条记录；内存缺失与零价单独隔离。</p></div>
-          <div class="quality-metrics"><div><span>7日有效记录</span><strong id="qualityTotalSkus">65,040</strong><small>7 份日报价单</small></div><div><span>最新两日可匹配</span><strong id="qualityMatchRate">78.7%</strong><small id="qualityMatchCount">5,191 条可比</small></div><div><span>内存缺失</span><strong id="qualityMissingMemory">20</strong><small>未进入机型比较</small></div><div class="quality-warning"><span>异常跳价</span><strong id="qualityAnomalies">649</strong><small>超过 ±30%，已隔离</small></div></div>
+          <div class="quality-title"><div class="panel-kicker">DATA HEALTH / 数据体检</div><h2 id="qualityHeadline">90 个自然日窗口，缺失不当作降价。</h2><p id="qualitySummary">最新批次 9,250 条记录；零价、异常与覆盖不足日单独隔离。</p></div>
+          <div class="quality-metrics"><div><span id="qualityTotalLabel">90日有效记录</span><strong id="qualityTotalSkus">665,174</strong><small><b id="qualityTotalDays">90</b> 份日报价单</small></div><div><span>最新两日可匹配</span><strong id="qualityMatchRate">95.6%</strong><small id="qualityMatchCount">8,846 条可比</small></div><div><span>覆盖不足日</span><strong id="qualityPartialDays">61</strong><small>缺失 SKU 不参与涨跌</small></div><div class="quality-warning"><span id="qualityAnomalyLabel">窗口异常跳价</span><strong id="qualityAnomalies">0</strong><small>超过 ±30%，已隔离</small></div></div>
           <button class="quality-action" type="button" data-method-open>指标字典与血缘 <span>↗</span></button>
-          <div class="quality-timeline" id="qualityTimeline" role="group" aria-label="7日有效报价趋势"></div>
+          <div class="quality-timeline" id="qualityTimeline" role="group" aria-label="90日有效报价与批次覆盖趋势"></div>
         </section>
 
-        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.5</span></div><p id="footerDemoNote">基于 2026.10.27–11.02 七份报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.05 · <a class="footer-prd-link" href="docs/prd.html">PRD v1.1</a></span></footer>
+        <footer class="page-footer"><div><strong>价脉 PRICE PULSE</strong><span>手机市场行情监控 · Prototype 0.7</span></div><p id="footerDemoNote">基于 2026.08.23–11.20 九十日报价单；价格为业务参考价，仅用于内部评审。</p><span>更新于 2026.11.20 · <a class="footer-prd-link" href="docs/prd.html">PRD v1.2</a></span></footer>
       </main>
     </div>
 
@@ -331,8 +339,8 @@
 
     <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
     <aside class="detail-drawer" id="detailDrawer" aria-hidden="true" aria-label="机型报价详情" inert>
-      <div class="drawer-head"><div class="drawer-heading"><span class="drawer-kicker">BUYER QUOTE / 买家报价与运营核验</span><h2 id="drawerTitle">机型详情</h2><div class="drawer-subline"><span id="drawerBrand"></span><i></i><span id="drawerMemory"></span><i></i><span id="drawerDate">2026.11.02</span></div></div><button class="drawer-close" type="button" id="drawerClose" aria-label="关闭详情"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
-      <div class="drawer-body"><div class="drawer-price-block"><span id="drawerCondition">靓机 · 当前价</span><div><strong id="drawerPrice">¥0</strong><span id="drawerChange" class="price-delta"></span></div><small>较上一交易日</small></div><div class="drawer-section-head"><span>选择报价对象</span><small id="drawerConfigMode">内存配置</small></div><div class="memory-options" id="drawerMemoryOptions" role="group" aria-label="内存配置"></div><div class="drawer-condition-tabs" id="drawerConditionTabs" role="group" aria-label="成色"></div><div class="quote-reference" id="quoteReference"><div class="quote-reference-head"><div><span>BUYER REFERENCE / 报价参考</span><strong id="quoteReferenceTitle">—</strong></div><span class="quote-reference-badge">参考价 · 非成交价</span></div><div class="quote-range-grid"><div><span>近 7 日中位</span><strong id="drawerQuoteMedian">—</strong></div><div><span>P25–P75 区间</span><strong id="drawerQuoteRange">—</strong></div><div><span>有效样本</span><strong id="drawerQuoteSample">—</strong></div></div><div class="quote-risk-line"><span id="drawerQuotePosition">—</span><span id="drawerQuoteVolatility">—</span></div><div class="quote-reference-meta"><span>数据截至 <b id="drawerQuoteDate">—</b></span><span>参考有效期 <b>当日</b></span><span id="quoteConfigModeNote">—</span></div><div class="quote-actions"><button class="quote-action" type="button" data-quote-copy>复制摘要</button><button class="quote-action" type="button" data-quote-watch aria-pressed="false">关注 SKU</button><button class="quote-action" type="button" data-quote-export>导出此 SKU</button></div><p class="quote-disclaimer">用于议价参考，不包含检测、物流、库存和资金成本，不等同成交价。</p></div><div class="drawer-chart-wrap"><div id="drawerChart" class="drawer-chart"></div></div><div class="drawer-section-head"><span>内存 × 成色矩阵</span><small>点击价格切换；小屏可左右滑动</small></div><div class="sku-matrix-wrap" id="skuMatrix"></div><div class="drawer-meta-grid"><div><span>期内累计</span><strong id="drawer7d">—</strong></div><div><span>数据覆盖</span><strong id="drawerCoverage">—</strong></div><div><span>重点池</span><strong id="drawerRank">—</strong></div></div><div class="drawer-note"><span>!</span><p id="drawerDataNote">缺失日不会被按 0 或降价处理；报价参考仅用于议价决策，不替代成交价、库存和毛利核算。</p></div></div>
+      <div class="drawer-head"><div class="drawer-heading"><span class="drawer-kicker">BUYER QUOTE / 买家报价与运营核验</span><h2 id="drawerTitle">机型详情</h2><div class="drawer-subline"><span id="drawerBrand"></span><i></i><span id="drawerMemory"></span><i></i><span id="drawerDate">2026.11.19</span></div></div><button class="drawer-close" type="button" id="drawerClose" aria-label="关闭详情"><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button></div>
+      <div class="drawer-body"><div class="drawer-price-block"><span id="drawerCondition">靓机 · 当前价</span><div><strong id="drawerPrice">¥0</strong><span id="drawerChange" class="price-delta"></span></div><small>较上一交易日</small></div><div class="drawer-section-head"><span>选择报价对象</span><small id="drawerConfigMode">内存配置</small></div><div class="memory-options" id="drawerMemoryOptions" role="group" aria-label="内存配置"></div><div class="drawer-condition-tabs" id="drawerConditionTabs" role="group" aria-label="成色"></div><div class="quote-reference" id="quoteReference"><div class="quote-reference-head"><div><span>BUYER REFERENCE / 报价参考</span><strong id="quoteReferenceTitle">—</strong></div><span class="quote-reference-badge">参考价 · 非成交价</span></div><div class="quote-range-grid"><div><span>近 30 日中位</span><strong id="drawerQuoteMedian">—</strong></div><div><span>P25–P75 区间</span><strong id="drawerQuoteRange">—</strong></div><div><span>有效样本</span><strong id="drawerQuoteSample">—</strong></div></div><div class="quote-risk-line"><span id="drawerQuotePosition">—</span><span id="drawerQuoteVolatility">—</span></div><div class="quote-reference-meta"><span>数据截至 <b id="drawerQuoteDate">—</b></span><span>参考有效期 <b>当日</b></span><span id="quoteConfigModeNote">—</span></div><div class="quote-actions"><button class="quote-action" type="button" data-quote-copy>复制摘要</button><button class="quote-action" type="button" data-quote-watch aria-pressed="false">关注 SKU</button><button class="quote-action" type="button" data-quote-export>导出此 SKU</button></div><p class="quote-disclaimer">用于议价参考，不包含检测、物流、库存和资金成本，不等同成交价。</p></div><div class="drawer-chart-wrap"><div id="drawerChart" class="drawer-chart"></div></div><div class="drawer-section-head"><span>内存 × 成色矩阵</span><small>点击价格切换；小屏可左右滑动</small></div><div class="sku-matrix-wrap" id="skuMatrix"></div><div class="drawer-meta-grid"><div><span>窗口累计</span><strong id="drawer7d">—</strong></div><div><span>数据覆盖</span><strong id="drawerCoverage">—</strong></div><div><span>重点池</span><strong id="drawerRank">—</strong></div></div><div class="drawer-note"><span>!</span><p id="drawerDataNote">缺失日不会被按 0 或降价处理；报价参考仅用于议价决策，不替代成交价、库存和毛利核算。</p></div></div>
     </aside>
 
     <dialog class="method-dialog" id="methodDialog">
@@ -340,7 +348,7 @@
       <div class="dialog-body" tabindex="0" aria-label="指标字典与数据血缘内容，可滚动">
         <div class="methodology-intro">
           <div><span class="panel-kicker">SHARED DEFINITION</span><h3>同一套口径，给运营、数据与产品共同使用。</h3></div>
-          <p>当前观察批次 <strong id="methodAsOf">2026.11.02 · 18:06</strong>；公网为脱敏演示数据，不连接生产服务。</p>
+          <p>当前观察批次 <strong id="methodAsOf">2026.11.19 · 18:06</strong>；公网为脱敏演示数据，不连接生产服务。</p>
         </div>
 
         <section class="methodology-section" aria-labelledby="methodStepsTitle">
@@ -349,15 +357,15 @@
             <div class="method-step"><span>01</span><div><strong>对齐同一 SKU</strong><p>以「日期 + 机型 ID + 内存 + 成色」为唯一键；同日同 SKU 只保留一个确认价，内存缺失与重复记录单独隔离。</p></div></div>
             <div class="method-step"><span>02</span><div><strong>只比较相邻两日同一 SKU</strong><p>零价、退出榜单和缺失日期不当作降价；新进榜也不当作涨价。</p></div></div>
             <div class="method-step"><span>03</span><div><strong>指数使用中位数并隔离跳价</strong><p>日涨跌超过 ±30% 视为异常跳价，不进入指数和品牌热力，仍保留在价格异常统计中。</p></div></div>
-            <div class="method-step"><span>04</span><div><strong>TOP100 为固定重点池</strong><p>选取近 7 日靓机连续有价、按最新靓机市场价排序的前 100 款机型；与全量口径分开计算。</p></div></div>
+            <div class="method-step"><span>04</span><div><strong>TOP100 为固定重点池</strong><p>选取近 7 个完整可用日靓机连续有价、按最新靓机市场价排序的前 100 款机型；与全量口径分开计算。</p></div></div>
             <div class="method-step"><span>05</span><div><strong>样本不足不输出强弱结论</strong><p>品牌或成色可比样本少于 5 条时标记“样本不足”，不进入排行结论。</p></div></div>
             <div class="method-step"><span>06</span><div><strong>报价矩阵与目标池</strong><p>买家按「内存 × 成色」查看参考价；目标池为 1,000 款，当前在榜 891 款，缺口 109 款单独进入运营待办。</p></div></div>
-            <div class="method-step"><span>07</span><div><strong>成色价差与固定队列</strong><p>成色价差仅取主配置、以靓机为基准，同价样本单列且不进入中位价差；固定队列选取当前成色 7 日连续有价的同一批机型，按每日中位涨跌复利形成指数。</p></div></div>
+            <div class="method-step"><span>07</span><div><strong>成色价差与固定队列</strong><p>成色价差仅取主配置、以靓机为基准，同价样本单列且不进入中位价差；固定队列在当前分析窗口内选取同一批连续有价机型，按每日中位涨跌复利形成指数。</p></div></div>
           </div>
         </section>
 
         <section class="methodology-section" aria-labelledby="metricDictionaryTitle">
-          <div class="methodology-section-head"><div><span>02 / METRIC DICTIONARY</span><h3 id="metricDictionaryTitle">指标字典</h3></div><p>从指标名称追到公式、来源和责任角色。</p><span class="freshness-badge"><i aria-hidden="true"></i><b id="methodFreshness">T+0 · 11.02 18:06</b></span></div>
+          <div class="methodology-section-head"><div><span>02 / METRIC DICTIONARY</span><h3 id="metricDictionaryTitle">指标字典</h3></div><p>从指标名称追到公式、来源和责任角色。</p><span class="freshness-badge"><i aria-hidden="true"></i><b id="methodFreshness">T+0 · 11.19 18:06</b></span></div>
           <div class="metric-table-wrap" tabindex="0" role="region" aria-label="指标字典表格，可横向滚动">
             <table class="metric-table">
               <caption class="sr-only">市场价格监控指标字典</caption>
@@ -374,20 +382,20 @@
             <li><span>01</span><strong>日报报价单</strong><small>每日 5 类成色 · 机型 / 内存 / 成色 / 市场价</small></li>
             <li><span>02</span><strong>SKU 唯一键归一</strong><small>日期 + 机型ID + 内存 + 成色</small></li>
             <li><span>03</span><strong>质量隔离</strong><small>零价 / 缺内存 / 同日重复 / ±30% 异常</small></li>
-            <li><span>04</span><strong>日快照</strong><small>891 款 · 2,604 个内存配置 · 7 日窗口</small></li>
+            <li><span>04</span><strong>日快照</strong><small>891 款 · 2,607 个内存配置 · 90 日窗口</small></li>
             <li><span>05</span><strong>指标计算</strong><small>指数 / 广度 / 队列 / 价格带 / 成色价差</small></li>
             <li><span>06</span><strong>监控看板</strong><small>运营监控 · 买家报价参考 · 数据体检</small></li>
           </ol>
         </section>
 
         <div class="method-data-note">
-          <div><span>源头</span><strong>日报报价单</strong><small>7 份自然日报价快照</small></div>
-          <div><span>主配置</span><strong>真实脱敏行情</strong><small>成色价差仅使用此层</small></div>
-          <div><span>演示配置</span><strong>synthetic-demo</strong><small>非主配置内存阶梯，不进入价差</small></div>
-          <div><span>更新节奏</span><strong>日更 · T+0</strong><small>演示批次 18:06 入库</small></div>
+          <div><span>源头</span><strong>日报报价单</strong><small><b id="methodBatchCount">90</b> 份自然日报价快照</small></div>
+          <div><span>价格口径</span><strong>真实脱敏行情</strong><small>机型详情覆盖真实多内存配置</small></div>
+          <div><span>成色价差</span><strong>主配置聚合</strong><small>同机型同内存比较，不混合口径</small></div>
+          <div><span>更新节奏</span><strong>日更 · T+0</strong><small>接口按日增量入库</small></div>
         </div>
       </div>
-      <div class="dialog-foot"><span id="methodFooterNote">当前为 7 日报价口径；指数仅反映报价变化，不等同成交量或利润。</span><button type="button" data-method-close>我知道了</button></div>
+      <div class="dialog-foot"><span id="methodFooterNote">当前为 90 日报价口径；指数仅反映报价变化，不等同成交量或利润。</span><button type="button" data-method-close>我知道了</button></div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

@@ -1,4 +1,10 @@
 .DS_Store
 assets/preview-*
+.playwright-cli/
 __pycache__/
 *.pyc
+data/raw/
+data/*.sqlite
+data/*.sqlite-*
+data/real/
+data/logs/
