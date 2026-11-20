@@ -19,6 +19,8 @@ LOG_FILE="$LOG_DIR/daily-$STAMP.log"
   python3 sync_market_data.py --days 4 --end-date "$BUSINESS_DATE" --refresh-last 3 --workers 2
   python3 build_dashboard_data.py --days 180 --db data/price_history.sqlite --output data/real/market_data_180d.js
   python3 prepare_public_data.py data/real/market_data_180d.js assets/data.js
+  # 每日变更静态资源版本号，避免浏览器继续使用上一天的 data.js 缓存。
+  sed -E -i '' "s/\\?v=[0-9A-Za-z-]+/\\?v=${STAMP}/g" index.html
 
   if git diff --quiet -- assets/data.js index.html app.js styles.css; then
     echo "数据与展示文件无变化，跳过提交"
